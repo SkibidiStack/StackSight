@@ -1,0 +1,31 @@
+[workspace]
+members = ["frontend", "backend"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+version = "0.1.0"
+authors = ["StackSight Team"]
+
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0.1"
+bollard = { version = "0.17" }
+clap = { version = "4", features = ["derive", "env"] }
+dioxus = { version = "0.5", features = ["hooks", "signals"] }
+dioxus-desktop = { version = "0.5" }
+dioxus-router = "0.5"
+dioxus-signals = "0.5"
+	futures = "0.3"
+	futures-util = "0.3"
+	shellexpand = "3"
+	tokio-tungstenite = "0.21"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sysinfo = "0.30"
+thiserror = "1"
+tokio = { version = "1", features = ["full"] }
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
