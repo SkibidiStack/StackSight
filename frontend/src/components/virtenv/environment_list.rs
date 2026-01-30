@@ -1,15 +1,27 @@
+use crate::state::AppState;
 use dioxus::prelude::*;
+use dioxus_signals::Signal;
 
 #[component]
 pub fn EnvironmentList() -> Element {
+    let app_state = use_context::<Signal<AppState>>();
+    let snapshot = app_state.read();
+    let total = snapshot.virtenv.environments;
+    let active = snapshot.virtenv.active;
+    drop(snapshot);
+
+    let summary = if total == 0 {
+        "No environments detected".to_string()
+    } else if active == 0 {
+        format!("{total} environments")
+    } else {
+        format!("{active} active / {total} total")
+    };
+
     rsx! {
         div { class: "panel",
             h2 { "Environments" }
-            ul { style: "list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px;",
-                li { class: "nav-link", span { "py-data-lab" } span { class: "muted", "python 3.11" } }
-                li { class: "nav-link", span { "node-services" } span { class: "muted", "node 20" } }
-                li { class: "nav-link", span { "rust-tools" } span { class: "muted", "stable" } }
-            }
+            div { class: "muted", "{summary}" }
         }
     }
 }

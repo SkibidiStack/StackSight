@@ -1,7 +1,7 @@
 use super::Section;
 use crate::router::Route;
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
+use dioxus_router::Link;
 
 struct NavItem {
     section: Section,
@@ -48,17 +48,12 @@ fn items() -> [NavItem; 5] {
 #[component]
 pub fn Sidebar(section: Section) -> Element {
     rsx! {
-        aside { class: "panel", style: "width: 280px; height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 18px;",
-            div { class: "badge", "DevEnv Manager" }
+        aside { class: "sidebar",
+            div { class: "sidebar-brand", "DevEnv Manager" }
             for item in items() {
-                Link { to: item.route.clone(), class: if item.section == section { "nav-link nav-active" } else { "nav-link" },
-                    div { style: "display: flex; flex-direction: column; gap: 4px;",
-                        span { style: "font-weight: 600;", "{item.label}" }
-                        span { class: "muted", "{item.description}" }
-                    }
-                    if item.section == section {
-                        span { class: "chip", "Live" }
-                    }
+                Link { to: item.route.clone(), class: if item.section == section { "nav-item nav-active" } else { "nav-item" },
+                    div { class: "nav-title", "{item.label}" }
+                    span { class: "nav-subtitle", "{item.description}" }
                 }
             }
         }

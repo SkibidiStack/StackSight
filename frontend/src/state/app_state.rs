@@ -57,6 +57,50 @@ pub struct DockerState {
     pub containers: Vec<ContainerSummary>,
     pub connected: bool,
     pub last_error: Option<String>,
+    pub stats: DockerStats,
+    pub images: Vec<ImageSummary>,
+    pub networks: Vec<NetworkSummary>,
+    pub volumes: Vec<VolumeSummary>,
+    pub action: DockerActionStatus,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct DockerStats {
+    pub containers: usize,
+    pub cpu_percent_avg: f64,
+    pub memory_used: u64,
+    pub memory_limit: u64,
+    pub net_rx: u64,
+    pub net_tx: u64,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct DockerActionStatus {
+    pub in_progress: bool,
+    pub last_action: Option<String>,
+    pub last_ok: Option<bool>,
+    pub message: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ImageSummary {
+    pub id: String,
+    pub repo_tags: Vec<String>,
+    pub size: u64,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct NetworkSummary {
+    pub id: String,
+    pub name: String,
+    pub driver: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct VolumeSummary {
+    pub name: String,
+    pub driver: String,
+    pub mountpoint: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]

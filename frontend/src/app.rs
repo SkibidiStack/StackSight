@@ -11,51 +11,120 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 const BASE_STYLE: &str = r#"
 :root {
-    --font-family: 'Space Grotesk', 'IBM Plex Sans', 'SF Pro Display', sans-serif;
-    --bg: #0f1722;
-    --panel: #131c2b;
-    --panel-strong: #0a101b;
-    --muted: #8ca3b8;
-    --text: #e9f1ff;
-    --accent: #6ce0c6;
-    --accent-strong: #2dc7a2;
+    --font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --bg: #0d1117;
+    --surface: #0f141c;
+    --panel: #121926;
+    --panel-strong: #0f1624;
+    --muted: #8b97ab;
+    --text: #e6edf7;
+    --accent: #4d8cf5;
+    --accent-strong: #2c6df2;
     --border: rgba(255, 255, 255, 0.08);
-    --glow: 0 20px 60px rgba(44, 179, 152, 0.18);
+    --card: #141c2b;
+    --card-border: rgba(255, 255, 255, 0.06);
 }
 
 * { box-sizing: border-box; }
 html, body, #main { width: 100%; height: 100%; margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--font-family); }
 
 .app-shell { display: flex; width: 100%; height: 100%; }
-.content-area { flex: 1; display: flex; flex-direction: column; background: radial-gradient(circle at 20% 20%, rgba(108, 224, 198, 0.06), transparent 30%), radial-gradient(circle at 80% 0%, rgba(45, 199, 162, 0.1), transparent 25%), var(--bg); }
-.section-body { flex: 1; padding: 24px; overflow: auto; }
+.content-area { flex: 1; display: flex; flex-direction: column; background: var(--bg); }
+.section-body { flex: 1; padding: 20px 24px; overflow: auto; }
 .section-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-.panel { background: linear-gradient(145deg, var(--panel), var(--panel-strong)); border: 1px solid var(--border); border-radius: 14px; padding: 16px; box-shadow: var(--glow); }
-.panel h2 { margin: 0 0 8px; font-size: 18px; }
+.panel { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; }
+.panel h2 { margin: 0 0 8px; font-size: 16px; }
 .muted { color: var(--muted); font-size: 14px; }
-.chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--border); color: var(--text); background: rgba(255, 255, 255, 0.03); }
-.nav-link { text-decoration: none; color: inherit; display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 12px; border: 1px solid transparent; }
+.nav-link { text-decoration: none; color: inherit; display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 10px; border: 1px solid transparent; }
 .nav-link:hover { border-color: var(--border); background: rgba(255, 255, 255, 0.04); }
-.nav-active { background: rgba(108, 224, 198, 0.1); border-color: rgba(108, 224, 198, 0.4); }
-.header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, rgba(19, 28, 43, 0.95), rgba(15, 23, 34, 0.95)); backdrop-filter: blur(6px); }
-.header h1 { margin: 0; font-size: 22px; letter-spacing: 0.02em; }
+.nav-active { background: rgba(77, 140, 245, 0.12); border-color: rgba(77, 140, 245, 0.4); }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.topbar-title { font-size: 18px; font-weight: 600; }
+.topbar-actions { display: flex; gap: 10px; align-items: center; }
 .badge { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--muted); }
 .grid-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 .stat { display: flex; flex-direction: column; gap: 6px; }
 .stat .label { font-size: 13px; color: var(--muted); }
 .stat .value { font-size: 20px; font-weight: 600; }
 .action-bar { display: flex; gap: 10px; }
-.btn { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; background: rgba(255, 255, 255, 0.04); color: var(--text); cursor: pointer; }
-.btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent-strong)); color: #0a111c; border: none; }
-.btn.small { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
-.btn.ghost { background: rgba(255, 255, 255, 0.02); border-color: var(--border); }
-.btn.danger { background: linear-gradient(135deg, #f79e9e, #e66b6b); color: #0a111c; border: none; }
+.btn { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: rgba(255, 255, 255, 0.04); color: var(--text); cursor: pointer; }
+.btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent-strong)); color: #0b1020; border: none; }
+.btn.small { padding: 5px 8px; font-size: 12px; border-radius: 6px; }
+.btn.ghost { background: transparent; border-color: var(--border); }
+.btn.danger { background: linear-gradient(135deg, #f27d7d, #e46363); color: #0b1020; border: none; }
+.input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    font-size: 13px;
+}
+.input:focus {
+    outline: none;
+    border-color: rgba(77, 140, 245, 0.6);
+    box-shadow: 0 0 0 2px rgba(77, 140, 245, 0.2);
+}
+select.input {
+    appearance: none;
+}
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .status-running { background: #2dc7a2; }
 .status-stopped { background: #e66b6b; }
 .status-unknown { background: #f5d06f; }
-.pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); font-size: 13px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); font-size: 12px; }
+
+.sidebar {
+    width: 260px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 14px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+}
+
+.sidebar-brand {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    padding: 6px 10px 12px;
+}
+
+.nav-item {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--border);
+}
+
+.nav-item.nav-active {
+    background: rgba(77, 140, 245, 0.16);
+    border-color: rgba(77, 140, 245, 0.4);
+}
+
+.nav-title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.nav-subtitle {
+    font-size: 12px;
+    color: var(--muted);
+}
 "#;
 
 #[component]
@@ -109,6 +178,9 @@ pub fn AppRoot() -> Element {
                 };
 
                 pending.push_back(Command::DockerList);
+                pending.push_back(Command::DockerListImages);
+                pending.push_back(Command::DockerListNetworks);
+                pending.push_back(Command::DockerListVolumes);
 
                 while let Some(cmd) = pending.pop_front() {
                     if let Err(err) = send_command(&mut sink, cmd.clone()).await {
@@ -208,6 +280,61 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
     match serde_json::from_str::<Event>(payload) {
         Ok(Event::DockerContainers(containers)) => {
             app_state.write().docker.containers = containers;
+            Ok(())
+        }
+        Ok(Event::DockerStatus { connected, error }) => {
+            let mut state = app_state.write();
+            state.docker.connected = connected;
+            state.docker.last_error = error;
+            Ok(())
+        }
+        Ok(Event::DockerStats {
+            containers,
+            cpu_percent_avg,
+            memory_used,
+            memory_limit,
+            net_rx,
+            net_tx,
+        }) => {
+            let mut state = app_state.write();
+            state.docker.stats.containers = containers;
+            state.docker.stats.cpu_percent_avg = cpu_percent_avg;
+            state.docker.stats.memory_used = memory_used;
+            state.docker.stats.memory_limit = memory_limit;
+            state.docker.stats.net_rx = net_rx;
+            state.docker.stats.net_tx = net_tx;
+            Ok(())
+        }
+        Ok(Event::DockerImages(images)) => {
+            app_state.write().docker.images = images;
+            Ok(())
+        }
+        Ok(Event::DockerNetworks(networks)) => {
+            app_state.write().docker.networks = networks;
+            Ok(())
+        }
+        Ok(Event::DockerVolumes(volumes)) => {
+            app_state.write().docker.volumes = volumes;
+            Ok(())
+        }
+        Ok(Event::DockerAction { action, ok, message }) => {
+            let mut state = app_state.write();
+            state.docker.action.in_progress = false;
+            state.docker.action.last_action = Some(action.clone());
+            state.docker.action.last_ok = Some(ok);
+            state.docker.action.message = message.clone();
+            if ok {
+                state.docker.last_error = None;
+            } else {
+                let msg = message.unwrap_or_else(|| format!("{action} failed"));
+                state.docker.last_error = Some(msg);
+            }
+            Ok(())
+        }
+        Ok(Event::VirtualEnvSummary { total, active }) => {
+            let mut state = app_state.write();
+            state.virtenv.environments = total;
+            state.virtenv.active = active;
             Ok(())
         }
         Ok(Event::SystemSnapshot(snapshot)) => {

@@ -15,7 +15,7 @@ fn main() {
             .with_maximized(true),
     );
 
-    launch(app::AppRoot, vec![], cfg);
+    launch(app::AppRoot, vec![], vec![Box::new(cfg)]);
 }
 
 fn init_tracing() {

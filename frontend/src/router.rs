@@ -7,7 +7,7 @@ use crate::components::{
     virtenv::{EnvironmentList, LanguageSelector, PackageManager, ProjectWizard},
 };
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
+use dioxus_router::{Routable, Router};
 
 #[derive(Clone, Routable, PartialEq)]
 pub enum Route {
