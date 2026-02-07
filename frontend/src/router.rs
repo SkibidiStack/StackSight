@@ -1,10 +1,6 @@
 use crate::components::{
-    dashboard::{ActivityFeed, OverviewPanel, QuickActions, SystemStatusWidget, WelcomeScreen},
-    docker::{ComposeBuilder, ContainerList, ImageManager, NetworkManager, StatsMonitor, VolumeManager},
+    docker::{ContainerList, ImageManager, NetworkManager, VolumeManager, EngineManager},
     layout::{MainLayout, Section},
-    monitoring::{AlertPanel, ProcessMonitor, ResourceCharts, SystemStats},
-    settings::{GeneralSettings, IntegrationSettings, NotificationSettings, ThemeSettings},
-    virtenv::{EnvironmentList, LanguageSelector, PackageManager, ProjectWizard},
 };
 use dioxus::prelude::*;
 use dioxus_router::{Routable, Router};
@@ -12,90 +8,58 @@ use dioxus_router::{Routable, Router};
 #[derive(Clone, Routable, PartialEq)]
 pub enum Route {
     #[route("/")]
-    Dashboard {},
-    #[route("/docker")]
-    Docker {},
-    #[route("/environments")]
-    Environments {},
-    #[route("/monitoring")]
-    Monitoring {},
-    #[route("/settings")]
-    Settings {},
+    Containers {},
+    #[route("/images")]
+    Images {},
+    #[route("/volumes")]
+    Volumes {},
+    #[route("/networks")]
+    Networks {},
+    #[route("/engine")]
+    Engine {},
 }
 
 #[component]
-pub fn Dashboard() -> Element {
+pub fn Containers() -> Element {
     rsx! {
-        MainLayout { section: Section::Dashboard, title: "Dashboard".to_string(),
-            div { class: "section-grid",
-                OverviewPanel {}
-                QuickActions {}
-                SystemStatusWidget {}
-                ActivityFeed {}
-                WelcomeScreen {}
-            }
+        MainLayout { section: Section::Containers, title: "Containers".to_string(),
+            ContainerList {}
         }
     }
 }
 
 #[component]
-pub fn Docker() -> Element {
+pub fn Images() -> Element {
     rsx! {
-        MainLayout { section: Section::Docker, title: "Docker".to_string(),
-            div { class: "grid-two",
-                ContainerList {}
-                StatsMonitor {}
-            }
-            div { class: "section-grid",
-                ImageManager {}
-                ComposeBuilder {}
-                NetworkManager {}
-                VolumeManager {}
-            }
+        MainLayout { section: Section::Images, title: "Images".to_string(),
+            ImageManager {}
         }
     }
 }
 
 #[component]
-pub fn Environments() -> Element {
+pub fn Volumes() -> Element {
     rsx! {
-        MainLayout { section: Section::Environments, title: "Virtual Environments".to_string(),
-            div { class: "grid-two",
-                EnvironmentList {}
-                LanguageSelector {}
-            }
-            div { class: "section-grid",
-                PackageManager {}
-                ProjectWizard {}
-            }
+        MainLayout { section: Section::Volumes, title: "Volumes".to_string(),
+            VolumeManager {}
         }
     }
 }
 
 #[component]
-pub fn Monitoring() -> Element {
+pub fn Networks() -> Element {
     rsx! {
-        MainLayout { section: Section::Monitoring, title: "Monitoring".to_string(),
-            div { class: "section-grid",
-                SystemStats {}
-                ResourceCharts {}
-                ProcessMonitor {}
-                AlertPanel {}
-            }
+        MainLayout { section: Section::Networks, title: "Networks".to_string(),
+            NetworkManager {}
         }
     }
 }
 
 #[component]
-pub fn Settings() -> Element {
+pub fn Engine() -> Element {
     rsx! {
-        MainLayout { section: Section::Settings, title: "Settings".to_string(),
-            div { class: "section-grid",
-                GeneralSettings {}
-                ThemeSettings {}
-                NotificationSettings {}
-                IntegrationSettings {}
-            }
+        MainLayout { section: Section::Engine, title: "Docker Engine".to_string(),
+            EngineManager {}
         }
     }
 }

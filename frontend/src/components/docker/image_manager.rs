@@ -1,5 +1,6 @@
 use crate::app::BackendBridge;
 use crate::state::{AppState, Command, DockerScaffoldConfig};
+use crate::components::docker::ManualBuildModal;
 use dioxus::prelude::*;
 use dioxus_signals::Signal;
 
@@ -7,9 +8,13 @@ use dioxus_signals::Signal;
 pub fn ImageManager() -> Element {
     let app_state = use_context::<Signal<AppState>>();
     let bridge = use_context::<BackendBridge>();
+    let mut search = use_signal(|| String::new());
     let mut pull_image = use_signal(|| "".to_string());
+    let mut show_build = use_signal(|| false);
+    let mut show_manual_build = use_signal(|| false);
     let mut build_context = use_signal(|| "".to_string());
     let mut build_tag = use_signal(|| "".to_string());
+    let mut show_scaffold = use_signal(|| false);
     let mut scaffold_context = use_signal(|| "".to_string());
     let mut scaffold_base_image = use_signal(|| "".to_string());
     let mut scaffold_ports = use_signal(|| "".to_string());
@@ -19,249 +24,304 @@ pub fn ImageManager() -> Element {
 
     let snapshot = app_state.read();
     let images = snapshot.docker.images.clone();
-    let last_error = snapshot.docker.last_error.clone();
     let action = snapshot.docker.action.clone();
     drop(snapshot);
 
-    let mut action_text: Option<String> = None;
-    let mut action_style: Option<String> = None;
-    if let Some(action_name) = action.last_action.clone() {
-        if action.in_progress {
-            action_text = Some(format!("{action_name} in progress..."));
-        } else if let Some(ok) = action.last_ok {
-            if ok {
-                action_text = Some(format!("{action_name} succeeded"));
-                action_style = Some("border-color: #2dc7a2; color: #2dc7a2;".to_string());
-            } else {
-                let msg = action
-                    .message
-                    .clone()
-                    .unwrap_or_else(|| format!("{action_name} failed"));
-                action_text = Some(msg);
-                action_style = Some("border-color: #e66b6b; color: #e66b6b;".to_string());
-            }
-        }
-    }
-    let action_style = action_style.unwrap_or_default();
+    let search_val = search.read().to_lowercase();
+    let filtered: Vec<_> = images
+        .iter()
+        .filter(|img| {
+            search_val.is_empty()
+                || img.repo_tags.iter().any(|tag| tag.to_lowercase().contains(&search_val))
+        })
+        .collect();
 
     let on_pull = {
         let bridge = bridge.clone();
         let mut app_state = app_state.clone();
         let pull_image = pull_image.clone();
         move |_| {
-            let image = pull_image.read().trim().to_string();
-            if !image.is_empty() {
-                let mut state = app_state.write();
-                state.docker.action.in_progress = true;
-                state.docker.action.last_action = Some("pull image".to_string());
-                state.docker.action.last_ok = None;
-                state.docker.action.message = None;
-                bridge.send(Command::DockerPullImage { image })
+            let img = pull_image.read().trim().to_string();
+            if !img.is_empty() {
+                let mut st = app_state.write();
+                st.docker.action.in_progress = true;
+                st.docker.action.last_action = Some("docker pull".to_string());
+                st.docker.action.last_ok = None;
+                drop(st);
+                bridge.send(Command::DockerPullImage { image: img });
             }
         }
     };
 
-    let on_build = {
+    let on_prune = {
         let bridge = bridge.clone();
-        let mut app_state = app_state.clone();
-        let build_context = build_context.clone();
-        let build_tag = build_tag.clone();
-        move |_| {
-            let context_path = build_context.read().trim().to_string();
-            if !context_path.is_empty() {
-                let tag_value = build_tag.read().trim().to_string();
-                let tag = if tag_value.is_empty() { None } else { Some(tag_value) };
-                let mut state = app_state.write();
-                state.docker.action.in_progress = true;
-                state.docker.action.last_action = Some("build image".to_string());
-                state.docker.action.last_ok = None;
-                state.docker.action.message = None;
-                bridge.send(Command::DockerBuildImage { context_path, tag })
-            }
-        }
-    };
-
-    let on_clean = {
-        let bridge = bridge.clone();
-        let mut app_state = app_state.clone();
-        move |_| {
-            let mut state = app_state.write();
-            state.docker.action.in_progress = true;
-            state.docker.action.last_action = Some("clean images".to_string());
-            state.docker.action.last_ok = None;
-            state.docker.action.message = None;
-            bridge.send(Command::DockerPruneImages)
-        }
-    };
-
-    let on_scaffold = {
-        let bridge = bridge.clone();
-        let mut app_state = app_state.clone();
-        let scaffold_context = scaffold_context.clone();
-        let scaffold_base_image = scaffold_base_image.clone();
-        let scaffold_ports = scaffold_ports.clone();
-        let scaffold_workdir = scaffold_workdir.clone();
-        let scaffold_cmd = scaffold_cmd.clone();
-        let scaffold_additional = scaffold_additional.clone();
-        move |_| {
-            let context_path = scaffold_context.read().trim().to_string();
-            let base_image = scaffold_base_image.read().trim().to_string();
-            if !context_path.is_empty() && !base_image.is_empty() {
-                let ports = scaffold_ports
-                    .read()
-                    .split(|c| c == ',' || c == ' ')
-                    .filter_map(|p| p.trim().parse::<u16>().ok())
-                    .collect::<Vec<_>>();
-
-                let workdir_value = scaffold_workdir.read().trim().to_string();
-                let workdir = if workdir_value.is_empty() { None } else { Some(workdir_value) };
-
-                let cmd_value = scaffold_cmd.read().trim().to_string();
-                let cmd = if cmd_value.is_empty() { None } else { Some(cmd_value) };
-
-                let additional_images = scaffold_additional
-                    .read()
-                    .split(|c| c == ',' || c == ' ')
-                    .map(|i| i.trim().to_string())
-                    .filter(|i| !i.is_empty())
-                    .collect::<Vec<_>>();
-
-                let mut state = app_state.write();
-                state.docker.action.in_progress = true;
-                state.docker.action.last_action = Some("scaffold dockerfile".to_string());
-                state.docker.action.last_ok = None;
-                state.docker.action.message = None;
-                bridge.send(Command::DockerScaffold {
-                    config: DockerScaffoldConfig {
-                        context_path,
-                        base_image,
-                        ports,
-                        workdir,
-                        cmd,
-                        additional_images,
-                    },
-                })
-            }
-        }
-    };
-
-    let on_refresh = {
-        let bridge = bridge.clone();
-        move |_| bridge.send(Command::DockerListImages)
+        move |_| bridge.send(Command::DockerPruneImages)
     };
 
     rsx! {
-        div { class: "panel",
-            h2 { "Images" }
-            div { class: "muted", "Pull, tag, and clean images." }
-            if let Some(err) = last_error {
-                div { class: "pill", style: "border-color: #e66b6b; color: #e66b6b;", "{err}" }
-            }
-            if let Some(text) = action_text {
-                div { class: "pill", style: "{action_style}", "{text}" }
-            }
-            div { style: "display: grid; gap: 10px; margin-top: 10px;",
-                div { style: "display: grid; gap: 6px;",
-                    span { class: "muted", "Pull image" }
-                    input {
-                        class: "input",
-                        r#type: "text",
-                        placeholder: "e.g. nginx:latest",
-                        value: "{pull_image.read()}",
-                        oninput: move |evt| pull_image.set(evt.value())
-                    }
+        div { class: "docker-view",
+            div { class: "view-header",
+                div { class: "view-title",
+                    h1 { "Images" }
+                    span { class: "count-badge", "{images.len()}" }
                 }
-                div { style: "display: grid; gap: 6px;",
-                    span { class: "muted", "Build context" }
+                div { class: "view-actions",
                     input {
-                        class: "input",
+                        class: "search-input",
                         r#type: "text",
-                        placeholder: "/path/to/context",
-                        value: "{build_context.read()}",
-                        oninput: move |evt| build_context.set(evt.value())
-                    }
-                }
-                div { style: "display: grid; gap: 6px;",
-                    span { class: "muted", "Build tag (optional)" }
-                    input {
-                        class: "input",
-                        r#type: "text",
-                        placeholder: "my-image:latest",
-                        value: "{build_tag.read()}",
-                        oninput: move |evt| build_tag.set(evt.value())
-                    }
-                }
-                div { style: "display: grid; gap: 6px;",
-                    span { class: "muted", "Scaffold Dockerfile" }
-                    input {
-                        class: "input",
-                        r#type: "text",
-                        placeholder: "/path/to/project",
-                        value: "{scaffold_context.read()}",
-                        oninput: move |evt| scaffold_context.set(evt.value())
+                        placeholder: "Search images...",
+                        value: "{search}",
+                        oninput: move |e| search.set(e.value().clone())
                     }
                     input {
-                        class: "input",
+                        class: "search-input",
                         r#type: "text",
-                        placeholder: "Base image (e.g. node:20-alpine)",
-                        value: "{scaffold_base_image.read()}",
-                        oninput: move |evt| scaffold_base_image.set(evt.value())
+                        placeholder: "Pull image (e.g., nginx:latest)",
+                        value: "{pull_image}",
+                        style: "width: 250px;",
+                        oninput: move |e| pull_image.set(e.value().clone())
                     }
-                    input {
-                        class: "input",
-                        r#type: "text",
-                        placeholder: "Ports (e.g. 3000, 8080)",
-                        value: "{scaffold_ports.read()}",
-                        oninput: move |evt| scaffold_ports.set(evt.value())
+                    button { class: "btn primary", onclick: on_pull, disabled: action.in_progress, "Pull" }
+                    button { 
+                        class: "btn", 
+                        onclick: move |_| show_manual_build.set(true),
+                        "Manual Build"
                     }
-                    input {
-                        class: "input",
-                        r#type: "text",
-                        placeholder: "Workdir (default /app)",
-                        value: "{scaffold_workdir.read()}",
-                        oninput: move |evt| scaffold_workdir.set(evt.value())
-                    }
-                    input {
-                        class: "input",
-                        r#type: "text",
-                        placeholder: "CMD (e.g. [\"npm\", \"start\"])",
-                        value: "{scaffold_cmd.read()}",
-                        oninput: move |evt| scaffold_cmd.set(evt.value())
-                    }
-                    input {
-                        class: "input",
-                        r#type: "text",
-                        placeholder: "Additional images to pull (e.g. redis:7, postgres:16)",
-                        value: "{scaffold_additional.read()}",
-                        oninput: move |evt| scaffold_additional.set(evt.value())
-                    }
-                    div { class: "action-bar", style: "gap: 8px;",
-                        button { class: "btn", onclick: on_scaffold, disabled: action.in_progress, "Create Dockerfile" }
-                    }
+                    button { class: "btn", onclick: move |_| show_scaffold.set(true), "Scaffold" }
+                    button { class: "btn", onclick: on_prune, "Clean Up" }
                 }
             }
-            div { class: "action-bar",
-                button { class: "btn ghost", onclick: on_refresh, "Refresh" }
-                button { class: "btn primary", onclick: on_pull, disabled: action.in_progress, "Pull image" }
-                button { class: "btn", onclick: on_build, disabled: action.in_progress, "Build" }
-                button { class: "btn", onclick: on_clean, disabled: action.in_progress, "Clean" }
-            }
+
             if images.is_empty() {
-                div { class: "muted", "No images found." }
+                div { class: "empty-state",
+                    div { class: "empty-icon", "📦" }
+                    h3 { "No images" }
+                    p { "Pull an image to get started." }
+                }
             } else {
-                ul { style: "list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 8px;",
-                    {images.iter().map(|image| {
-                        let label = image.repo_tags.first().cloned().unwrap_or_else(|| "<none>".to_string());
-                        let size_mb = image.size / 1_048_576;
-                        rsx! {
-                            li { class: "nav-link", key: "{image.id}",
-                                span { "{label}" }
-                                span { class: "muted", "{size_mb} MB" }
+                table { class: "docker-table",
+                    thead {
+                        tr {
+                            th { class: "col-checkbox", input { r#type: "checkbox" } }
+                            th { "Repository" }
+                            th { "Tag" }
+                            th { "Image ID" }
+                            th { "Created" }
+                            th { "Size" }
+                            th { class: "col-actions", "Actions" }
+                        }
+                    }
+                    tbody {
+                        {filtered.iter().map(|img| {
+                            let id = img.id.clone();
+                            let repo_tag = img.repo_tags.first().unwrap_or(&"<none>".to_string()).clone();
+                            let parts: Vec<&str> = repo_tag.split(':').collect();
+                            let repo = parts.first().unwrap_or(&"<none>");
+                            let tag = parts.get(1).unwrap_or(&"latest");
+                            
+                            let on_delete = {
+                                let id = id.clone();
+                                let bridge = bridge.clone();
+                                move |_| {
+                                    bridge.send(Command::DockerRemoveImage { id: id.clone(), force: false })
+                                }
+                            };
+                            
+                            let on_run = {
+                                let repo_tag = repo_tag.clone();
+                                let bridge = bridge.clone();
+                                move |_| {
+                                    bridge.send(Command::DockerRunImage { image: repo_tag.clone() })
+                                }
+                            };
+                            
+                            rsx! {
+                                tr { class: "table-row", key: "{id}",
+                                    td { class: "col-checkbox", input { r#type: "checkbox" } }
+                                    td { class: "col-name",
+                                        div { class: "cell-main", "{repo}" }
+                                    }
+                                    td { "{tag}" }
+                                    td {
+                                        div { class: "cell-sub", "{id[..12].to_string()}" }
+                                    }
+                                    td { class: "col-image", "—" }
+                                    td {
+                                        div { class: "cell-sub", 
+                                            {format!("{:.1} MB", img.size as f64 / 1_000_000.0)}
+                                        }
+                                    }
+                                    td { class: "col-actions",
+                                        div { class: "action-buttons",
+                                            button { class: "action-btn action-primary", onclick: on_run, title: "Run", "▶" }
+                                            button { class: "action-btn action-danger", onclick: on_delete, title: "Delete", "🗑" }
+                                        }
+                                    }
+                                }
+                            }
+                        })}
+                    }
+                }
+            }
+
+            if *show_build.read() {
+                div { class: "modal-overlay", onclick: move |_| show_build.set(false),
+                    div { class: "modal", onclick: move |e| e.stop_propagation(),
+                        h2 { "Build Image" }
+                        div { class: "form-group",
+                            label { "Context Path" }
+                            input {
+                                class: "input",
+                                r#type: "text",
+                                placeholder: "/path/to/context",
+                                value: "{build_context}",
+                                oninput: move |e| build_context.set(e.value().clone())
                             }
                         }
-                    })}
+                        div { class: "form-group",
+                            label { "Image Tag (optional)" }
+                            input {
+                                class: "input",
+                                r#type: "text",
+                                placeholder: "myapp:latest",
+                                value: "{build_tag}",
+                                oninput: move |e| build_tag.set(e.value().clone())
+                            }
+                        }
+                        div { class: "modal-actions",
+                            button { class: "btn", onclick: move |_| show_build.set(false), "Cancel" }
+                            button {
+                                class: "btn primary",
+                                onclick: {
+                                    let bridge = bridge.clone();
+                                    let build_context = build_context.clone();
+                                    let build_tag = build_tag.clone();
+                                    move |_| {
+                                        let tag_val = build_tag.read().trim().to_string();
+                                        bridge.send(Command::DockerBuildImage {
+                                            context_path: build_context.read().clone(),
+                                            tag: if tag_val.is_empty() { None } else { Some(tag_val) },
+                                        });
+                                        show_build.set(false);
+                                    }
+                                },
+                                "Build"
+                            }
+                        }
+                    }
+                }
+            }
+
+            if *show_scaffold.read() {
+                div { class: "modal-overlay", onclick: move |_| show_scaffold.set(false),
+                    div { class: "modal", onclick: move |e| e.stop_propagation(),
+                        h2 { "Scaffold Dockerfile" }
+                        div { class: "form-group",
+                            label { "Project Path" }
+                            input {
+                                class: "input",
+                                r#type: "text",
+                                placeholder: "/path/to/project",
+                                value: "{scaffold_context}",
+                                oninput: move |e| scaffold_context.set(e.value().clone())
+                            }
+                        }
+                        div { class: "form-group",
+                            label { "Base Image" }
+                            input {
+                                class: "input",
+                                r#type: "text",
+                                placeholder: "node:18, python:3.11, etc.",
+                                value: "{scaffold_base_image}",
+                                oninput: move |e| scaffold_base_image.set(e.value().clone())
+                            }
+                        }
+                        div { class: "form-group",
+                            label { "Ports (comma-separated)" }
+                            input {
+                                class: "input",
+                                r#type: "text",
+                                placeholder: "3000, 8080",
+                                value: "{scaffold_ports}",
+                                oninput: move |e| scaffold_ports.set(e.value().clone())
+                            }
+                        }
+                        div { class: "form-group",
+                            label { "Working Directory" }
+                            input {
+                                class: "input",
+                                r#type: "text",
+                                value: "{scaffold_workdir}",
+                                oninput: move |e| scaffold_workdir.set(e.value().clone())
+                            }
+                        }
+                        div { class: "form-group",
+                            label { "CMD" }
+                            input {
+                                class: "input",
+                                r#type: "text",
+                                placeholder: "npm start or python app.py",
+                                value: "{scaffold_cmd}",
+                                oninput: move |e| scaffold_cmd.set(e.value().clone())
+                            }
+                        }
+                        div { class: "form-group",
+                            label { "Additional Images (comma-separated)" }
+                            input {
+                                class: "input",
+                                r#type: "text",
+                                placeholder: "redis:7, postgres:15",
+                                value: "{scaffold_additional}",
+                                oninput: move |e| scaffold_additional.set(e.value().clone())
+                            }
+                        }
+                        div { class: "modal-actions",
+                            button { class: "btn", onclick: move |_| show_scaffold.set(false), "Cancel" }
+                            button {
+                                class: "btn primary",
+                                onclick: {
+                                    let bridge = bridge.clone();
+                                    let scaffold_context = scaffold_context.clone();
+                                    let scaffold_base_image = scaffold_base_image.clone();
+                                    let scaffold_ports = scaffold_ports.clone();
+                                    let scaffold_workdir = scaffold_workdir.clone();
+                                    let scaffold_cmd = scaffold_cmd.clone();
+                                    let scaffold_additional = scaffold_additional.clone();
+                                    move |_| {
+                                        let ports: Vec<u16> = scaffold_ports
+                                            .read()
+                                            .split(',')
+                                            .filter_map(|s| s.trim().parse().ok())
+                                            .collect();
+                                        let additional_images: Vec<String> = scaffold_additional
+                                            .read()
+                                            .split(',')
+                                            .map(|s| s.trim().to_string())
+                                            .filter(|s| !s.is_empty())
+                                            .collect();
+                                        
+                                        bridge.send(Command::DockerScaffold {
+                                            config: DockerScaffoldConfig {
+                                                context_path: scaffold_context.read().clone(),
+                                                base_image: scaffold_base_image.read().clone(),
+                                                ports,
+                                                workdir: Some(scaffold_workdir.read().clone()),
+                                                cmd: if scaffold_cmd.read().is_empty() { None } else { Some(scaffold_cmd.read().clone()) },
+                                                additional_images,
+                                            }
+                                        });
+                                        show_scaffold.set(false);
+                                    }
+                                },
+                                "Generate"
+                            }
+                        }
+                    }
                 }
             }
         }
+
+        // Manual Build Modal
+        ManualBuildModal { show: show_manual_build }
     }
 }

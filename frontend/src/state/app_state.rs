@@ -113,6 +113,38 @@ pub struct VirtualEnvState {
 pub struct UiState {
     pub current_route: String,
     pub loading: bool,
+    pub toasts: Vec<Toast>,
+    pub logs_modal: Option<LogsModal>,
+    pub dockerfile_editor: Option<DockerfileEditor>,
+    pub build_confirmation: Option<String>,
+    pub engine_logs: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+pub struct LogsModal {
+    pub container_id: String,
+    pub logs: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+pub struct DockerfileEditor {
+    pub path: String,
+    pub dockerfile: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+pub struct Toast {
+    pub id: u64,
+    pub message: String,
+    pub toast_type: ToastType,
+    pub timestamp: u64,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ToastType {
+    Success,
+    Error,
+    Info,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]

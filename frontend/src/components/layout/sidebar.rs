@@ -1,46 +1,47 @@
 use super::Section;
 use crate::router::Route;
+use crate::app::ThemeToggle;
 use dioxus::prelude::*;
 use dioxus_router::Link;
 
 struct NavItem {
     section: Section,
     label: &'static str,
-    description: &'static str,
+    icon: &'static str,
     route: Route,
 }
 
 fn items() -> [NavItem; 5] {
     [
         NavItem {
-            section: Section::Dashboard,
-            label: "Dashboard",
-            description: "System pulse",
-            route: Route::Dashboard {},
+            section: Section::Containers,
+            label: "Containers",
+            icon: "⬢",
+            route: Route::Containers {},
         },
         NavItem {
-            section: Section::Docker,
-            label: "Docker",
-            description: "Containers & images",
-            route: Route::Docker {},
+            section: Section::Images,
+            label: "Images",
+            icon: "⬡",
+            route: Route::Images {},
         },
         NavItem {
-            section: Section::Environments,
-            label: "Environments",
-            description: "Language stacks",
-            route: Route::Environments {},
+            section: Section::Volumes,
+            label: "Volumes",
+            icon: "⬢",
+            route: Route::Volumes {},
         },
         NavItem {
-            section: Section::Monitoring,
-            label: "Monitoring",
-            description: "Metrics & alerts",
-            route: Route::Monitoring {},
+            section: Section::Networks,
+            label: "Networks",
+            icon: "⬡",
+            route: Route::Networks {},
         },
         NavItem {
-            section: Section::Settings,
-            label: "Settings",
-            description: "Preferences",
-            route: Route::Settings {},
+            section: Section::Engine,
+            label: "Engine",
+            icon: "⚙",
+            route: Route::Engine {},
         },
     ]
 }
@@ -49,11 +50,19 @@ fn items() -> [NavItem; 5] {
 pub fn Sidebar(section: Section) -> Element {
     rsx! {
         aside { class: "sidebar",
-            div { class: "sidebar-brand", "DevEnv Manager" }
-            for item in items() {
-                Link { to: item.route.clone(), class: if item.section == section { "nav-item nav-active" } else { "nav-item" },
-                    div { class: "nav-title", "{item.label}" }
-                    span { class: "nav-subtitle", "{item.description}" }
+            div { class: "sidebar-brand", 
+                div { class: "brand-icon", "◆" }
+                span { "StackSight" }
+                ThemeToggle {}
+            }
+            nav { class: "sidebar-nav",
+                for item in items() {
+                    Link { 
+                        to: item.route.clone(), 
+                        class: if item.section == section { "sidebar-item sidebar-item-active" } else { "sidebar-item" },
+                        div { class: "sidebar-icon", "{item.icon}" }
+                        span { "{item.label}" }
+                    }
                 }
             }
         }

@@ -14,4 +14,8 @@ pub enum Event {
     VirtualEnvSummary(VirtualEnvSummary),
     DockerStatus { connected: bool, error: Option<String> },
     DockerAction { action: String, ok: bool, message: Option<String> },
+    DockerLogs { container_id: String, logs: String },
+    DockerfileGenerated { path: String, dockerfile: String },
+    DockerfileSaved { path: String },
+    DockerEngineLogs { logs: String },
 }
