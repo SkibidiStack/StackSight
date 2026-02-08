@@ -18,13 +18,46 @@ impl ServiceManager {
     pub async fn new(config: AppConfig) -> Result<Self> {
         let bus = EventBus::new(128);
         let mut services = Vec::new();
-        let (cmd_tx, cmd_rx) = mpsc::channel::<Command>(128);
+        let (docker_cmd_tx, docker_cmd_rx) = mpsc::channel::<Command>(128);
+        let (virtenv_cmd_tx, virtenv_cmd_rx) = mpsc::channel::<Command>(128);
+        let (system_cmd_tx, system_cmd_rx) = mpsc::channel::<Command>(128);
 
-        services.push(ServiceHandle::Docker(DockerService::new(bus.clone(), cmd_rx).await?));
-        services.push(ServiceHandle::VirtualEnv(VirtualEnvService::new(bus.clone()).await?));
-        services.push(ServiceHandle::System(SystemService::new(bus.clone()).await?));
+        // Main command channel for incoming commands from communication service
+        let (main_cmd_tx, mut main_cmd_rx) = mpsc::channel::<Command>(128);
+
+        // Create a command dispatcher task to route commands to appropriate services
+        let docker_tx = docker_cmd_tx.clone();
+        let virtenv_tx = virtenv_cmd_tx.clone();
+        let system_tx = system_cmd_tx.clone();
+        tokio::spawn(async move {
+            while let Some(cmd) = main_cmd_rx.recv().await {
+                match &cmd {
+                    Command::VirtEnvCreate { .. } |
+                    Command::VirtEnvDelete { .. } |
+                    Command::VirtEnvActivate { .. } |
+                    Command::VirtEnvDeactivate { .. } |
+                    Command::VirtEnvInstallPackages { .. } |
+                    Command::VirtEnvList |
+                    Command::VirtEnvGetTemplates => {
+                        let _ = virtenv_tx.send(cmd).await;
+                    }
+                    Command::SystemGetProcessList |
+                    Command::SystemKillProcess { .. } => {
+                        let _ = system_tx.send(cmd).await;
+                    }
+                    _ => {
+                        // Docker and other commands
+                        let _ = docker_tx.send(cmd).await;
+                    }
+                }
+            }
+        });
+
+        services.push(ServiceHandle::Docker(DockerService::new(bus.clone(), docker_cmd_rx).await?));
+        services.push(ServiceHandle::VirtualEnv(VirtualEnvService::new(bus.clone(), virtenv_cmd_rx).await?));
+        services.push(ServiceHandle::System(SystemService::new(bus.clone(), system_cmd_rx).await?));
         services.push(ServiceHandle::FileSystem(FileSystemService::new(bus.clone()).await?));
-        services.push(ServiceHandle::Communication(CommunicationService::new(bus.clone(), cmd_tx).await?));
+        services.push(ServiceHandle::Communication(CommunicationService::new(bus.clone(), main_cmd_tx).await?));
 
         Ok(Self { config, bus, services })
     }

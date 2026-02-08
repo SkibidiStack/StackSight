@@ -7,7 +7,7 @@ pub fn SystemStatusWidget() -> Element {
     let app_state = use_context::<Signal<AppState>>();
     let snapshot = app_state.read();
     let cpu_usage = snapshot.system.cpu_usage;
-    let alerts = snapshot.system.alerts;
+    let alerts_count = snapshot.system.alerts.len();
     let docker_connected = snapshot.docker.connected;
     drop(snapshot);
 
@@ -17,10 +17,10 @@ pub fn SystemStatusWidget() -> Element {
         "—".to_string()
     };
 
-    let alerts_label = if alerts == 0 {
+    let alerts_label = if alerts_count == 0 {
         "None".to_string()
     } else {
-        format!("{alerts} open")
+        format!("{alerts_count} open")
     };
 
     let docker_label = if docker_connected { "Connected" } else { "Offline" };

@@ -81,7 +81,21 @@ pub fn ImageManager() -> Element {
                         style: "width: 250px;",
                         oninput: move |e| pull_image.set(e.value().clone())
                     }
-                    button { class: "btn primary", onclick: on_pull, disabled: action.in_progress, "Pull" }
+                    button { 
+                        class: "btn primary", 
+                        onclick: on_pull, 
+                        disabled: action.in_progress,
+                        style: "display: flex; align-items: center; gap: 8px;",
+                        if action.in_progress && action.last_action.as_ref().map(|a| a.contains("pull")).unwrap_or(false) {
+                            div { 
+                                class: "loading-spinner", 
+                                style: "width: 16px; height: 16px; border-width: 2px; margin: 0;" 
+                            }
+                            "Pulling..."
+                        } else {
+                            "Pull"
+                        }
+                    }
                     button { 
                         class: "btn", 
                         onclick: move |_| show_manual_build.set(true),
@@ -89,6 +103,17 @@ pub fn ImageManager() -> Element {
                     }
                     button { class: "btn", onclick: move |_| show_scaffold.set(true), "Scaffold" }
                     button { class: "btn", onclick: on_prune, "Clean Up" }
+                }
+            }
+
+            // Show error banner if last action failed
+            if let Some(false) = action.last_ok {
+                if let Some(msg) = &action.message {
+                    div { class: "alert alert-error",
+                        style: "margin: 16px 24px;",
+                        strong { "Error: " }
+                        "{msg}"
+                    }
                 }
             }
 

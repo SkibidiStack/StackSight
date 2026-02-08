@@ -1,0 +1,43 @@
+# Cargo configuration for cross-platform builds
+
+# Windows-specific settings
+[target.x86_64-pc-windows-msvc]
+rustflags = [
+    # Use the Windows subsystem for GUI apps (no console window in release mode)
+    # Only for the frontend
+    # Note: Individual crates can override this
+]
+
+[target.x86_64-pc-windows-gnu]
+rustflags = [
+    # For MinGW builds
+]
+
+# Linux-specific settings
+[target.x86_64-unknown-linux-gnu]
+rustflags = []
+
+# macOS-specific settings
+[target.x86_64-apple-darwin]
+rustflags = []
+
+[target.aarch64-apple-darwin]
+rustflags = []
+
+# Build settings
+[build]
+# Number of parallel jobs
+jobs = 4
+
+# Profile configurations
+[profile.release]
+# Optimize for size and performance
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true  # Strip symbols for smaller binaries
+
+[profile.dev]
+# Faster compilation in development
+opt-level = 0
+debug = true

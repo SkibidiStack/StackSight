@@ -5,3 +5,4 @@ pub mod layout;
 pub mod monitoring;
 pub mod settings;
 pub mod virtenv;
+pub mod setup;

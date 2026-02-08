@@ -14,7 +14,8 @@ pub fn OverviewPanel() -> Element {
         .filter(|c| c.state == "running")
         .count();
     let cpu_usage = snapshot.system.cpu_usage;
-    let mem_usage = snapshot.system.memory_usage;
+    let mem_used = snapshot.system.memory_used;
+    let mem_total = snapshot.system.memory_total;
     let env_total = snapshot.virtenv.environments;
     drop(snapshot);
 
@@ -30,10 +31,10 @@ pub fn OverviewPanel() -> Element {
         "—".to_string()
     };
 
-    let mem_label = if mem_usage.is_finite() {
-        format!("{:.1}%", mem_usage)
+    let mem_label = if mem_total > 0 {
+        format!("{:.1}%", (mem_used as f64 / mem_total as f64) * 100.0)
     } else {
-        "—".to_string()
+        "0.0%".to_string()
     };
 
     let env_label = if env_total == 0 {

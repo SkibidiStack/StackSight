@@ -1,6 +1,8 @@
 use crate::components::{
     docker::{ContainerList, ImageManager, NetworkManager, VolumeManager, EngineManager},
     layout::{MainLayout, Section},
+    monitoring::MonitoringDashboard,
+    virtenv::EnvironmentList,
 };
 use dioxus::prelude::*;
 use dioxus_router::{Routable, Router};
@@ -17,6 +19,10 @@ pub enum Route {
     Networks {},
     #[route("/engine")]
     Engine {},
+    #[route("/virtual-environments")]
+    VirtualEnvironments {},
+    #[route("/monitoring")]
+    Monitoring {},
 }
 
 #[component]
@@ -65,6 +71,24 @@ pub fn Engine() -> Element {
 }
 
 #[component]
+pub fn VirtualEnvironments() -> Element {
+    rsx! {
+        MainLayout { section: Section::VirtualEnvironment, title: "Virtual Environments".to_string(),
+            EnvironmentList {}
+        }
+    }
+}
+
+#[component]
 pub fn AppRouter() -> Element {
     rsx!(Router::<Route> {})
+}
+
+#[component]
+pub fn Monitoring() -> Element {
+    rsx! {
+        MainLayout { section: Section::Monitoring, title: "System Monitoring".to_string(),
+            MonitoringDashboard {}
+        }
+    }
 }

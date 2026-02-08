@@ -49,6 +49,26 @@ impl DockerService {
             return true;
         }
 
+        // Try to connect based on platform
+        #[cfg(windows)]
+        {
+            if self.try_connect_windows() {
+                return true;
+            }
+        }
+
+        #[cfg(unix)]
+        {
+            if self.try_connect_unix() {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    #[cfg(unix)]
+    fn try_connect_unix(&mut self) -> bool {
         let mut attempts = Vec::new();
 
         if let Some(path) = docker_socket_from_env() {
@@ -82,6 +102,39 @@ impl DockerService {
         let msg = last_err.unwrap_or_else(|| "docker socket not found".to_string());
         self.last_error = Some(msg.clone());
         Self::publish_status(&self.bus, false, Some(msg));
+        false
+    }
+
+    #[cfg(windows)]
+    fn try_connect_windows(&mut self) -> bool {
+        // Try named pipe first (Docker Desktop default)
+        match Docker::connect_with_named_pipe_defaults() {
+            Ok(client) => {
+                self.client = Some(client);
+                self.last_error = None;
+                Self::publish_status(&self.bus, true, None);
+                return true;
+            }
+            Err(err) => {
+                warn!("Failed to connect via named pipe: {}", err);
+            }
+        }
+
+        // Try TCP connection as fallback
+        match Docker::connect_with_http_defaults() {
+            Ok(client) => {
+                self.client = Some(client);
+                self.last_error = None;
+                Self::publish_status(&self.bus, true, None);
+                return true;
+            }
+            Err(err) => {
+                let msg = format!("Failed to connect to Docker: {}", err);
+                self.last_error = Some(msg.clone());
+                Self::publish_status(&self.bus, false, Some(msg));
+            }
+        }
+
         false
     }
 
@@ -234,12 +287,82 @@ impl DockerService {
     }
 
     async fn docker_pull(client: &Docker, image: &str) -> Result<()> {
+        use tracing::{info, warn};
+        
         let opts = Some(CreateImageOptions {
             from_image: image,
             ..Default::default()
         });
+        
+        info!("Starting pull for image: {}", image);
         let mut stream = client.create_image(opts, None, None);
-        while let Some(_progress) = stream.next().await.transpose()? {}
+        let mut progress_count = 0;
+        let mut completed_layers = 0;
+        let mut error_count = 0;
+        let max_errors = 5; // Allow up to 5 parse errors before giving up
+        
+        while let Some(progress_result) = stream.next().await {
+            match progress_result {
+                Ok(progress) => {
+                    progress_count += 1;
+                    
+                    // Log progress for debugging
+                    if let Some(status) = &progress.status {
+                        let status_lower = status.to_lowercase();
+                        
+                        // Track completed layers
+                        if status_lower.contains("pull complete") || status_lower.contains("already exists") {
+                            completed_layers += 1;
+                        }
+                        
+                        // Log interesting progress
+                        if status_lower.contains("pulling") 
+                            || status_lower.contains("downloading") 
+                            || status_lower.contains("extracting")
+                            || status_lower.contains("pull complete")
+                            || status_lower.contains("digest")
+                            || status_lower.contains("status") {
+                            if progress_count % 20 == 0 || status_lower.contains("digest") || status_lower.contains("status") {
+                                info!("Pull progress for {}: {} - {}", image, progress.id.as_deref().unwrap_or(""), status);
+                            }
+                        }
+                    }
+                    
+                    // Check for errors in the progress message
+                    if let Some(error) = &progress.error {
+                        warn!("Docker pull error for {}: {}", image, error);
+                        return Err(anyhow::anyhow!("Pull failed: {}", error));
+                    }
+                }
+                Err(err) => {
+                    error_count += 1;
+                    // Handle stream errors gracefully instead of crashing
+                    warn!("Stream error #{} during pull of {}: {}", error_count, image, err);
+                    
+                    // Check if it's a connection error vs a parse error
+                    let err_msg = err.to_string();
+                    if err_msg.contains("connection") || err_msg.contains("timeout") {
+                        return Err(anyhow::anyhow!("Connection error while pulling image: {}", err));
+                    } else if error_count > max_errors {
+                        // Too many errors, probably something wrong
+                        return Err(anyhow::anyhow!("Too many stream errors while pulling image: {}", err));
+                    } else {
+                        // For parse errors or other non-critical errors, log and continue
+                        warn!("Non-critical stream error {}/{}, continuing: {}", error_count, max_errors, err);
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        info!("Successfully pulled image: {} ({} progress updates, {} completed layers, {} errors)", 
+              image, progress_count, completed_layers, error_count);
+        
+        // Verify we actually got some progress, otherwise the pull might have failed silently
+        if progress_count == 0 {
+            return Err(anyhow::anyhow!("No progress updates received for image pull"));
+        }
+        
         Ok(())
     }
 
@@ -731,7 +854,13 @@ impl DockerService {
             Command::DockerPullImage { image } => {
                 let result = Self::docker_pull(client, &image).await;
                 match result {
-                    Ok(()) => self.bus.publish(Event::DockerAction { action: "pull image".to_string(), ok: true, message: None }),
+                    Ok(()) => {
+                        self.bus.publish(Event::DockerAction { action: "pull image".to_string(), ok: true, message: None });
+                        // Immediately refresh image list so user sees the new image
+                        if let Ok(images) = Self::snapshot_images(client).await {
+                            self.bus.publish(Event::DockerImages(images));
+                        }
+                    }
                     Err(err) => self.bus.publish(Event::DockerAction { action: "pull image".to_string(), ok: false, message: Some(err.to_string()) }),
                 }
             }
@@ -786,7 +915,7 @@ impl DockerService {
                     Err(err) => self.bus.publish(Event::DockerAction { action: "build image".to_string(), ok: false, message: Some(err.to_string()) }),
                 }
             }
-            Command::DockerBuildFromDockerfile { path, dockerfile, tag } => {
+            Command::DockerBuildFromDockerfile { path: _path, dockerfile: _dockerfile, tag: _tag } => {
                 // Automatic build disabled to prevent crashes
                 warn!("Automatic build disabled - directing user to manual build UI");
                 self.bus.publish(Event::DockerAction { 
@@ -850,6 +979,18 @@ impl DockerService {
                     }
                     Err(err) => self.bus.publish(Event::DockerAction { action: "scaffold dockerfile".to_string(), ok: false, message: Some(err.to_string()) }),
                 }
+            }
+            // Virtual environment commands - ignore them, they're handled by VirtualEnvService
+            Command::VirtEnvCreate { .. } |
+            Command::VirtEnvDelete { .. } |
+            Command::VirtEnvActivate { .. } |
+            Command::VirtEnvDeactivate { .. } |
+            Command::VirtEnvInstallPackages { .. } |
+            Command::VirtEnvList |
+            Command::VirtEnvGetTemplates |
+            Command::SystemGetProcessList |
+            Command::SystemKillProcess { .. } => {
+                // These commands are handled by other services, ignore them here
             }
         }
 

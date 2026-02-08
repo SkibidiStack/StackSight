@@ -12,6 +12,7 @@ authors = ["StackSight Team"]
 anyhow = "1"
 async-trait = "0.1"
 bollard = { version = "0.17" }
+chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env"] }
 dioxus = { version = "0.7.1", features = ["hooks", "signals"] }
 dioxus-desktop = { version = "0.7.1" }
@@ -29,3 +30,4 @@ tokio = { version = "1", features = ["full"] }
 toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }

@@ -11,7 +11,7 @@ struct NavItem {
     route: Route,
 }
 
-fn items() -> [NavItem; 5] {
+fn items() -> [NavItem; 7] {
     [
         NavItem {
             section: Section::Containers,
@@ -42,6 +42,18 @@ fn items() -> [NavItem; 5] {
             label: "Engine",
             icon: "⚙",
             route: Route::Engine {},
+        },
+        NavItem {
+            section: Section::VirtualEnvironment,
+            label: "Virtual Envs",
+            icon: "◈",
+            route: Route::VirtualEnvironments {},
+        },
+        NavItem {
+            section: Section::Monitoring,
+            label: "Monitoring",
+            icon: "◉",
+            route: Route::Monitoring {},
         },
     ]
 }

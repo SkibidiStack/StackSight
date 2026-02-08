@@ -19,7 +19,26 @@ tracing-subscriber.workspace = true
 tokio.workspace = true
 tokio-tungstenite.workspace = true
 thiserror.workspace = true
+anyhow.workspace = true
+uuid.workspace = true
+chrono.workspace = true
 rfd = "0.14"
+directories = "5.0"
+reqwest = { version = "0.11", features = ["json"] }
+urlencoding = "2.1"
+image = "0.24"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["Window"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Request", "RequestInit", "RequestMode", "Response", "Window"] }
+serde-wasm-bindgen = "0.6"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
+# Windows-specific configuration
+# Use the Windows subsystem for GUI apps (no console window)
+[[bin]]
+name = "devenv-frontend"
+path = "src/main.rs"

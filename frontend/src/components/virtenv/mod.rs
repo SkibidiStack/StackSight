@@ -7,8 +7,15 @@ mod package_manager;
 mod project_wizard;
 mod template_manager;
 mod version_selector;
+mod web_package_modal;
 
+pub use dependency_viewer::DependencyViewer;
+pub use environment_detail::EnvironmentDetail;
 pub use environment_list::EnvironmentList;
+pub use environment_settings::EnvironmentSettings;
 pub use language_selector::LanguageSelector;
 pub use package_manager::PackageManager;
-pub use project_wizard::ProjectWizard;
+pub use project_wizard::{ProjectWizard, CreateEnvironmentForm};
+pub use template_manager::TemplateManager;
+pub use version_selector::VersionSelector;
+pub use web_package_modal::WebPackageModal;

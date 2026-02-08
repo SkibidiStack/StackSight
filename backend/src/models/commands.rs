@@ -30,6 +30,19 @@ pub enum Command {
     DockerStartEngine,
     DockerStopEngine,
     DockerGetEngineLogs,
+    
+    // Virtual Environment Commands
+    VirtEnvCreate { request: crate::models::virtenv::CreateEnvironmentRequest },
+    VirtEnvDelete { env_id: String },
+    VirtEnvActivate { env_id: String },
+    VirtEnvDeactivate { env_id: String },
+    VirtEnvInstallPackages { operation: crate::models::virtenv::PackageOperation },
+    VirtEnvList,
+    VirtEnvGetTemplates,
+
+    // System Commands
+    SystemGetProcessList,
+    SystemKillProcess { pid: String },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

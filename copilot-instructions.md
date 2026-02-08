@@ -2,6 +2,10 @@
 
 Goal: Build a 100% Rust-based application that manages Docker containers, virtual environments, and system health. Use the attached backend/frontend architectures as the baseline. Prioritize strong separation of concerns, async operations (Tokio), safety, and cross-platform support. Deliverables must ship as a single self-contained executable per platform (no zip extractions or multi-file installers).
 
+# DISCLAIMER: ALWAYS DOUBLE CHECK THE FILES YOU EDIT FOR ERRORS ALWAYS REBUILD THE APPS TO MAKE SURE THERE ARE NO ERRORS
+
+# DISCLAIMER: WHENEVER ADDING ANY PLACEHOLDER CODE MAKE SURE TO LET THE USER KNOW THAT THERE IS PLACEHOLDER CODE AND PREFERABLY DONT USE PLACEHOLDER CODE WHATSOEVER ALWAYS TRY TO CREATE THE ACTUAL FUNCTIONALITY REQUESTED
+
 ## Product Scope
 - Docker Dashboard: create/start/stop/restart/remove containers; pull/build/tag images; manage networks/volumes; view logs/stats; generate docker-compose files.
 - Virtual Environments: create/activate/deactivate/list/clone/remove environments for Python (incl. scientific stacks like scikit-learn), Rust, Node, Go, .NET, Java, etc.; manage package installs/updates with pip/conda/poetry, cargo, npm/yarn/pnpm, go mod, nuget; support premade templates/folders and dependency resolution.

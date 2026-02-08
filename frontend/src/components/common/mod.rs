@@ -7,5 +7,8 @@ mod loading_spinner;
 mod modal_system;
 mod notification_toast;
 mod search_input;
+mod terminal;
 mod terminal_panel;
+
+pub use terminal::Terminal;
 

@@ -1,0 +1,514 @@
+.setup-wizard {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    flex-direction: column;
+}
+
+.wizard-header {
+    background: white;
+    padding: 2rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.logo-container {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.wizard-logo {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 1rem;
+}
+
+.logo-container h1 {
+    font-size: 2rem;
+    margin: 0;
+    color: #2d3748;
+}
+
+.logo-container .subtitle {
+    color: #718096;
+    margin-top: 0.5rem;
+}
+
+.wizard-progress {
+    display: flex;
+    justify-content: space-between;
+    max-width: 800px;
+    margin: 0 auto;
+    position: relative;
+}
+
+.wizard-progress::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #e2e8f0;
+    z-index: 0;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #a0aec0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.step.active .step-number {
+    background: #667eea;
+    color: white;
+}
+
+.step.completed .step-number {
+    background: #48bb78;
+    color: white;
+}
+
+.step-label {
+    font-size: 0.875rem;
+    color: #718096;
+}
+
+.step.active .step-label {
+    color: #2d3748;
+    font-weight: 600;
+}
+
+.wizard-content {
+    flex: 1;
+    padding: 3rem 2rem;
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.wizard-step {
+    background: white;
+    border-radius: 12px;
+    padding: 2.5rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.wizard-step h2 {
+    margin-top: 0;
+    color: #2d3748;
+    font-size: 1.75rem;
+}
+
+.wizard-step > p {
+    color: #718096;
+    font-size: 1.125rem;
+    margin-bottom: 2rem;
+}
+
+.wizard-footer {
+    background: white;
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+}
+
+.step-indicator {
+    color: #718096;
+    font-weight: 500;
+}
+
+/* Welcome Step */
+.welcome-content {
+    text-align: center;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+}
+
+.feature-card {
+    padding: 1.5rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    transition: all 0.3s;
+}
+
+.feature-card:hover {
+    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.feature-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.feature-card h3 {
+    font-size: 1.125rem;
+    margin: 0.5rem 0;
+    color: #2d3748;
+}
+
+.feature-card p {
+    color: #718096;
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.setup-time, .privacy-note {
+    margin-top: 2rem;
+    padding: 1rem;
+    background: #f7fafc;
+    border-radius: 8px;
+    color: #4a5568;
+}
+
+/* Detection Panel */
+.detection-panel {
+    background: #f7fafc;
+    padding: 2rem;
+    border-radius: 8px;
+    margin: 2rem 0;
+}
+
+.status-display {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border-radius: 6px;
+}
+
+.status-success {
+    background: #c6f6d5;
+    color: #22543d;
+    padding: 1rem;
+    border-radius: 6px;
+}
+
+.status-warning {
+    background: #fef5e7;
+    color: #744210;
+    padding: 1rem;
+    border-radius: 6px;
+}
+
+.spinner {
+    text-align: center;
+    color: #667eea;
+    font-weight: 500;
+}
+
+/* Path Configuration */
+.path-config {
+    margin: 2rem 0;
+}
+
+.path-option {
+    padding: 1.5rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.path-option:hover {
+    border-color: #cbd5e0;
+}
+
+.path-option input[type="radio"] {
+    margin-right: 1rem;
+}
+
+.path-option input[type="radio"]:checked ~ label,
+.path-option:has(input:checked) {
+    border-color: #667eea;
+    background: #f7fafc;
+}
+
+.path-display {
+    font-family: 'Monaco', 'Menlo', monospace;
+    background: #2d3748;
+    color: #68d391;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin: 0.5rem 0;
+}
+
+.help-text {
+    color: #718096;
+    font-size: 0.875rem;
+    margin: 0.5rem 0 0 0;
+}
+
+.custom-path-input {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f7fafc;
+    border-radius: 6px;
+}
+
+.input-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.input-group input {
+    flex: 1;
+}
+
+/* Tools Grid */
+.tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.tool-card {
+    padding: 1.5rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.tool-card.detected {
+    border-color: #48bb78;
+    background: #f0fff4;
+}
+
+.tool-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.tool-card h4 {
+    margin: 0.5rem 0;
+    color: #2d3748;
+}
+
+.version {
+    font-size: 0.75rem;
+    color: #718096;
+    font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
+.status-badge.success {
+    background: #c6f6d5;
+    color: #22543d;
+}
+
+.status-badge.warning {
+    background: #fef5e7;
+    color: #744210;
+}
+
+.status-badge.info {
+    background: #bee3f8;
+    color: #2c5282;
+}
+
+/* Summary */
+.summary-grid {
+    display: grid;
+    gap: 1.5rem;
+    margin: 2rem 0;
+}
+
+.summary-card {
+    padding: 1.5rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.summary-card h3 {
+    margin-top: 0;
+    color: #2d3748;
+}
+
+.config-item {
+    margin: 1rem 0;
+}
+
+.config-item label {
+    display: block;
+    color: #718096;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
+
+.config-item code {
+    display: block;
+    background: #2d3748;
+    color: #68d391;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 0.875rem;
+}
+
+.tools-list {
+    list-style: none;
+    padding: 0;
+}
+
+.tools-list li {
+    padding: 0.5rem 0;
+    color: #48bb78;
+}
+
+.next-steps {
+    background: #f7fafc;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin: 2rem 0;
+}
+
+.next-steps h3 {
+    margin-top: 0;
+    color: #2d3748;
+}
+
+.next-steps ul {
+    margin: 1rem 0 0 0;
+}
+
+.next-steps li {
+    margin: 0.5rem 0;
+    color: #4a5568;
+}
+
+.ready-message {
+    text-align: center;
+    font-size: 1.25rem;
+    color: #48bb78;
+    font-weight: 600;
+    padding: 1.5rem;
+    background: #f0fff4;
+    border-radius: 8px;
+    margin-top: 2rem;
+}
+
+/* Help Boxes */
+.help-box, .info-box {
+    background: #ebf8ff;
+    border-left: 4px solid #4299e1;
+    padding: 1.5rem;
+    border-radius: 4px;
+    margin: 2rem 0;
+}
+
+.help-box h4, .info-box h4 {
+    margin-top: 0;
+    color: #2c5282;
+}
+
+.help-box ul, .info-box ul {
+    margin: 0.5rem 0;
+}
+
+.help-box li, .info-box li {
+    margin: 0.5rem 0;
+}
+
+.help-box code, .info-box code {
+    background: #2d3748;
+    color: #68d391;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.875rem;
+}
+
+.note {
+    background: #fffaf0;
+    border-left: 4px solid #ed8936;
+    padding: 1rem;
+    margin-top: 1rem;
+    border-radius: 4px;
+    color: #744210;
+}
+
+details {
+    margin: 0.5rem 0;
+    padding: 1rem;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #2d3748;
+}
+
+summary:hover {
+    color: #667eea;
+}
+
+.path-preview {
+    background: #f7fafc;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin: 2rem 0;
+}
+
+.path-preview h4 {
+    margin-top: 0;
+    color: #2d3748;
+}
+
+.preview-path {
+    margin: 1rem 0;
+}
+
+.preview-path code {
+    display: block;
+    background: #2d3748;
+    color: #68d391;
+    padding: 1rem;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.example {
+    color: #718096;
+    font-size: 0.875rem;
+}
+
+.example code {
+    background: #2d3748;
+    color: #68d391;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+}
