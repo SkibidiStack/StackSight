@@ -1,0 +1,66 @@
+# WebView2 Missing Error - SOLUTION
+
+## The Error
+```
+The code execution cannot proceed because webview2loader.dll was not found.
+```
+
+## Why This Happens
+StackSight uses Microsoft Edge WebView2 for its GUI. This component isn't always pre-installed on Windows.
+
+## Solution (Choose One)
+
+### Option 1: Use the Auto-Installer (Easiest)
+```
+Double-click: install-and-run.bat
+```
+This will:
+- Check if WebView2 is installed
+- Download and install it if missing
+- Start StackSight automatically
+
+### Option 2: Manual Installation
+1. Download WebView2 Runtime:
+   https://go.microsoft.com/fwlink/p/?LinkId=2124703
+
+2. Run the installer (MicrosoftEdgeWebview2Setup.exe)
+
+3. After installation, run: start-stacksight.bat
+
+### Option 3: Use Winget (Windows 11)
+```powershell
+winget install Microsoft.EdgeWebView2Runtime
+```
+
+## What is WebView2?
+- Microsoft's embedded web browser engine
+- Based on Microsoft Edge (Chromium)
+- Used by many modern Windows apps
+- Small download (~120 MB)
+- Free and safe to install
+
+## After Installation
+Once WebView2 is installed:
+- You only need to install it once
+- All future runs will work normally
+- Use `start-stacksight.bat` to launch the app
+
+## Still Having Issues?
+
+### Check if WebView2 is installed:
+```powershell
+# Run in PowerShell:
+Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+```
+
+If this returns an error, WebView2 is not installed.
+
+### Alternative: Use Command-Line Version
+If you can't install WebView2, you can still use the backend:
+```
+devenv-backend.exe
+```
+This provides the core functionality via command line/API.
+
+## Why Not Bundle It?
+WebView2 Runtime is ~120 MB and needs system-level installation. We keep the app small (13 MB) and let Windows handle the WebView2 installation.

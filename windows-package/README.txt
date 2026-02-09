@@ -1,5 +1,46 @@
 # StackSight for Windows
 
+## IMPORTANT: Known Issue - Cross-Compilation Limitation
+
+**The Windows build was cross-compiled from Linux and may have WebView2 linking issues.**
+
+### Solution: Build on Windows Instead
+
+To get a fully working version:
+
+1. **On your Windows machine**, install:
+   ```powershell
+   # Install Rust
+   winget install Rustlang.Rustup
+   
+   # Install Visual Studio Build Tools
+   winget install Microsoft.VisualStudio.2022.BuildTools
+   # (Select "Desktop development with C++")
+   ```
+
+2. **Copy the entire StackSight source folder** to Windows
+
+3. **Build on Windows**:
+   ```powershell
+   cd StackSight\StackSight\frontend
+   cargo build --release
+   
+   cd ..\backend
+   cargo build --release
+   ```
+
+4. **Run**:
+   ```powershell
+   # Start backend
+   ..\target\release\devenv-backend.exe
+   
+   # Start frontend (in new window)
+   ..\target\release\devenv-frontend.exe
+   ```
+
+### Why This Happens
+Cross-compiling GUI apps from Linux to Windows can miss runtime dependencies like WebView2Loader.dll. Building natively on Windows ensures all dependencies are properly linked.
+
 ## Quick Start
 
 1. **Run StackSight**:

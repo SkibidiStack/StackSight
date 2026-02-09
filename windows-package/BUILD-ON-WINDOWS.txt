@@ -1,0 +1,92 @@
+# Cross-Compilation Issue - WebView2Loader.dll
+
+## Problem
+The executables were cross-compiled from Linux to Windows using MinGW. This can cause issues with WebView2 integration because:
+
+1. WebView2Loader.dll may not be properly linked
+2. Some Windows-specific runtime dependencies aren't included
+3. Cross-compilation works for simple apps, but GUI apps with native dependencies are tricky
+
+## Solution: Build Natively on Windows
+
+### Step 1: Install Build Tools on Windows
+
+```powershell
+# Install Rust (takes 5 minutes)
+# Visit: https://rustup.rs/
+# Or use:
+winget install Rustlang.Rustup
+
+# Install Visual Studio Build Tools (takes 10 minutes)
+# Visit: https://visualstudio.microsoft.com/downloads/
+# Download "Build Tools for Visual Studio 2022"
+# Install "Desktop development with C++" workload
+# Or use:
+winget install Microsoft.VisualStudio.2022.BuildTools
+```
+
+### Step 2: Transfer Source Code to Windows
+
+Copy the **entire StackSight project folder** (not just the executables) to your Windows machine via:
+- USB drive
+- Network share  
+- Git clone (if you have it in a repository)
+- Cloud storage
+
+### Step 3: Build on Windows
+
+```powershell
+# Open PowerShell or Command Prompt
+cd StackSight\StackSight
+
+# Build backend
+cd backend
+cargo build --release
+cd ..
+
+# Build frontend  
+cd frontend
+cargo build --release
+cd ..
+
+# Executables will be at:
+# target\release\devenv-backend.exe
+# target\release\devenv-frontend.exe
+```
+
+### Step 4: Run
+
+```powershell
+# Start backend first
+start target\release\devenv-backend.exe
+
+# Wait 2 seconds, then start frontend
+timeout /t 2
+start target\release\devenv-frontend.exe
+```
+
+## Why This Works
+
+Building on Windows ensures:
+- ✅ Proper WebView2 integration
+- ✅ All Windows-specific DLLs are linked correctly
+- ✅ Native Windows toolchain (MSVC) is used
+- ✅ Icon embedding works properly
+- ✅ All runtime dependencies are included
+
+## Alternative: Use Tauri Instead of Dioxus
+
+If you need to keep cross-compiling, we could port the app to Tauri, which has better cross-compilation support. But building on Windows is the quickest solution.
+
+## First Build Time
+
+- **First build**: 10-20 minutes (downloads all dependencies)
+- **Subsequent builds**: 1-3 minutes (incremental compilation)
+
+## Result
+
+After building on Windows, you'll have fully working executables with:
+- Proper WebView2 integration
+- No missing DLL errors
+- Taskbar icon embedded
+- All features working
