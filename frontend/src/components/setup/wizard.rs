@@ -1,10 +1,10 @@
 use dioxus::prelude::*;
-use crate::state::{SetupConfig, PathConfig};
+use crate::state::SetupConfig;
 
 #[component]
 pub fn SetupWizard(on_complete: EventHandler<SetupConfig>) -> Element {
     let mut current_step = use_signal(|| 0);
-    let mut config = use_signal(SetupConfig::default);
+    let config = use_signal(SetupConfig::default);
 
     let steps = vec![
         "Welcome",

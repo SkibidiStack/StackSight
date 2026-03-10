@@ -4,10 +4,10 @@ use crate::state::Command;
 
 #[component]
 pub fn ManualBuildModal(show: Signal<bool>) -> Element {
-    let mut dockerfile_path = use_signal(|| String::new());
-    let mut project_path = use_signal(|| String::new());
+    let dockerfile_path = use_signal(|| String::new());
+    let project_path = use_signal(|| String::new());
     let mut image_tag = use_signal(|| String::new());
-    let mut is_building = use_signal(|| false);
+    let is_building = use_signal(|| false);
 
     let bridge = use_context::<BackendBridge>();
 

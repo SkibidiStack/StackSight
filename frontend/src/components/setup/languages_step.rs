@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use crate::state::{SetupConfig, PathConfig};
+use crate::state::SetupConfig;
 
 #[component]
 pub fn LanguagesStep(config: Signal<SetupConfig>) -> Element {

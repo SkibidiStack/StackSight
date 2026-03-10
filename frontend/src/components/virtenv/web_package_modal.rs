@@ -114,13 +114,13 @@ pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<
         }
     }
     
-    let mut search_query = use_signal(|| String::new());
+    let search_query = use_signal(|| String::new());
     let mut search_results = use_signal(|| Vec::<OnlinePackage>::new());
-    let mut selected_packages = use_signal(|| Vec::<String>::new());
+    let selected_packages = use_signal(|| Vec::<String>::new());
     let mut is_searching = use_signal(|| false);
     let mut search_error = use_signal(|| Option::<String>::None);
     let mut current_tab = use_signal(|| "search".to_string());
-    let mut sort_by = use_signal(|| "relevance".to_string());
+    let sort_by = use_signal(|| "relevance".to_string());
     
     let package_operation = app_state.read().virtenv.package_operation.clone();
     let is_installing = package_operation.as_ref()

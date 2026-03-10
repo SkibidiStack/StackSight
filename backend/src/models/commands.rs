@@ -43,6 +43,9 @@ pub enum Command {
     // System Commands
     SystemGetProcessList,
     SystemKillProcess { pid: String },
+
+    // Network Commands
+    NetworkScanDevices,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

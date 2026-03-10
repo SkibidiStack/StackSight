@@ -137,6 +137,7 @@ pub enum PackageOperationType {
     Upgrade,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EnvironmentAction {
     pub env_id: String,
@@ -144,6 +145,7 @@ pub struct EnvironmentAction {
     pub parameters: HashMap<String, String>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ActionType {
     Activate,

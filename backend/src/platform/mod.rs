@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub enum PlatformKind {
     Windows,
@@ -6,6 +7,7 @@ pub enum PlatformKind {
     Unknown,
 }
 
+#[allow(dead_code)]
 pub fn detect() -> PlatformKind {
     if cfg!(target_os = "windows") {
         PlatformKind::Windows

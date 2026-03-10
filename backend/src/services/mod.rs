@@ -4,6 +4,8 @@ pub mod docker;
 pub mod filesystem;
 pub mod system;
 pub mod virtenv;
+pub mod network;
+pub mod remote_desktop;
 
 use anyhow::Result;
 
@@ -13,12 +15,15 @@ pub trait Service {
     async fn run(self) -> Result<()>;
 }
 
+#[allow(dead_code)]
 pub enum ServiceHandle {
     Docker(docker::DockerService),
     VirtualEnv(virtenv::VirtualEnvService),
     System(system::SystemService),
     FileSystem(filesystem::FileSystemService),
     Communication(communication::CommunicationService),
+    Network(network::NetworkService),
+    RemoteDesktop(remote_desktop::RemoteDesktopService),
 }
 
 impl ServiceHandle {
@@ -29,6 +34,8 @@ impl ServiceHandle {
             ServiceHandle::System(s) => s.start().await,
             ServiceHandle::FileSystem(s) => s.start().await,
             ServiceHandle::Communication(s) => s.start().await,
+            ServiceHandle::Network(s) => s.start().await,
+            ServiceHandle::RemoteDesktop(_) => Ok(()),
         }
     }
 
@@ -39,6 +46,8 @@ impl ServiceHandle {
             ServiceHandle::System(s) => s.run().await,
             ServiceHandle::FileSystem(s) => s.run().await,
             ServiceHandle::Communication(s) => s.run().await,
+            ServiceHandle::Network(s) => s.run().await,
+            ServiceHandle::RemoteDesktop(_) => Ok(()),
         }
     }
 }

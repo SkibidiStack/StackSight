@@ -544,14 +544,68 @@ html, body, #main { width: 100%; height: 100%; background: var(--bg); color: var
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
 .panel h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
 .muted { color: var(--muted); }
-.btn { border: 1px solid var(--border); border-radius: 6px; padding: 8px 16px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; }
-.btn:hover { background: var(--panel-hover); }
-.btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
-.btn.primary:hover { background: var(--accent-hover); }
-.btn.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-.btn.btn-primary:hover { background: var(--accent-hover); }
-.btn.btn-secondary { background: var(--surface); color: var(--text); }
-.btn.btn-outline { background: transparent; border-color: var(--border); color: var(--text); }
+
+/* Buttons - comprehensive styling */
+.btn, button.btn, button[class*="btn-"] {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 16px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.15s;
+}
+
+.btn:hover, button.btn:hover, button[class*="btn-"]:hover {
+    background: var(--panel-hover);
+}
+
+.btn.primary, .btn.btn-primary, .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    font-weight: 500;
+}
+
+.btn.primary:hover, .btn.btn-primary:hover, .btn-primary:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+}
+
+.btn.btn-secondary, .btn-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
+}
+
+.btn.btn-secondary:hover, .btn-secondary:hover {
+    background: var(--panel-hover);
+    border-color: var(--border-light);
+}
+
+.btn.btn-outline, .btn-outline {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.btn-outline:hover {
+    background: var(--panel-hover);
+}
+
+.btn:disabled, button[class*="btn-"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn.disabled, .btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 .input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 14px; }
 .input:focus { outline: none; border-color: var(--accent); }
 textarea.input {
@@ -1062,6 +1116,15 @@ select.input {
     font-size: 13px;
     font-weight: 500;
     color: var(--text);
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
 }
 
 .form-input {
@@ -3037,6 +3100,12 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
         }
         Ok(Event::SystemSnapshot(snapshot)) => {
             apply_system_snapshot(app_state, snapshot);
+            Ok(())
+        }
+        Ok(Event::NetworkTopology(topology)) => {
+            let mut state = app_state.write();
+            state.network.topology = Some(topology);
+            state.network.topology_scanning = false;
             Ok(())
         }
         Err(err) => Err(format!("event parse failed: {err}")),

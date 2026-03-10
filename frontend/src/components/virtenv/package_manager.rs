@@ -13,7 +13,7 @@ pub fn PackageManager(env_id: String) -> Element {
     let package_operation = app_state.read().virtenv.package_operation.clone();
     
     let mut search_query = use_signal(|| String::new());
-    let mut selected_packages = use_signal(|| Vec::<String>::new());
+    let selected_packages = use_signal(|| Vec::<String>::new());
     let mut show_install_modal = use_signal(|| false);
     let mut show_web_modal = use_signal(|| false);
     

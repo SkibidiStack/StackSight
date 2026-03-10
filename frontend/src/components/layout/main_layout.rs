@@ -13,6 +13,8 @@ pub enum Section {
     Engine,
     VirtualEnvironment,
     Monitoring,
+    NetworkManager,
+    RemoteDesktop,
 }
 
 #[component]

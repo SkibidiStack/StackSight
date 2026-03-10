@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use crate::state::messages::{DiskInfo, NetworkInfo, ProcessInfo, Alert, LoadAvg};
+use crate::state::messages::{DiskInfo, NetworkInfo, ProcessInfo, Alert, LoadAvg, NetworkTopologyData};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AppState {
@@ -8,6 +8,8 @@ pub struct AppState {
     pub system: SystemStatus,
     pub docker: DockerState,
     pub virtenv: VirtualEnvState,
+    pub network: NetworkState,
+    pub remote_desktop: RemoteDesktopState,
     pub ui: UiState,
     pub setup: SetupConfig,
 }
@@ -19,6 +21,8 @@ impl Default for AppState {
             system: SystemStatus::default(),
             docker: DockerState::default(),
             virtenv: VirtualEnvState::default(),
+            network: NetworkState::default(),
+            remote_desktop: RemoteDesktopState::default(),
             ui: UiState::default(),
             setup: SetupConfig::load_or_default(),
         }
@@ -451,4 +455,95 @@ impl Default for SetupConfig {
             dotnet_path: None,
         }
     }
+}
+
+// Network state management
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct NetworkState {
+    pub interfaces: Vec<NetworkInterface>,
+    pub vlans: Vec<VlanConfig>,
+    pub routes: Vec<Route>,
+    pub firewall_rules: Vec<FirewallRule>,
+    pub topology: Option<NetworkTopologyData>,
+    pub topology_scanning: bool,
+    pub loading: bool,
+    pub last_error: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct NetworkInterface {
+    pub name: String,
+    pub display_name: String,
+    pub status: String,
+    pub ip_addresses: Vec<String>,
+    pub mac_address: Option<String>,
+    pub mtu: u32,
+    pub interface_type: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct VlanConfig {
+    pub id: u16,
+    pub name: String,
+    pub parent_interface: String,
+    pub enabled: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct Route {
+    pub destination: String,
+    pub gateway: String,
+    pub interface: String,
+    pub metric: u32,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct FirewallRule {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub action: String,
+    pub direction: String,
+}
+
+// Remote Desktop state management
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct RemoteDesktopState {
+    pub connections: Vec<RemoteConnection>,
+    pub active_sessions: Vec<ActiveSession>,
+    pub groups: Vec<ConnectionGroup>,
+    pub loading: bool,
+    pub last_error: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct RemoteConnection {
+    pub id: String,
+    pub name: String,
+    pub protocol: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub status: String,
+    pub last_connected: Option<String>,
+    pub favorite: bool,
+    pub tags: Vec<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ActiveSession {
+    pub session_id: String,
+    pub connection_id: String,
+    pub connection_name: String,
+    pub started_at: String,
+    pub bytes_sent: u64,
+    pub bytes_received: u64,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ConnectionGroup {
+    pub id: String,
+    pub name: String,
+    pub color: Option<String>,
+    pub connection_count: usize,
 }

@@ -87,7 +87,7 @@ pub fn Terminal() -> Element {
     let mut terminal_state = use_signal(|| TerminalState::default());
     let mut app_state = use_context::<Signal<crate::state::AppState>>();
     
-    let mut scroll_to_bottom = move || {
+    let scroll_to_bottom = move || {
         println!("[TERMINAL] scroll_to_bottom called!");
         spawn(async move {
             let mut eval = document::eval(

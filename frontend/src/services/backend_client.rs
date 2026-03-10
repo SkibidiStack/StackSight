@@ -86,7 +86,20 @@ impl BackendClient {
             websocket_url: "ws://127.0.0.1:8765".to_string(),
         }
     }
-    
+
+    /// Send a raw JSON value over WebSocket (used for commands not in the typed enum).
+    pub async fn send_ws_command(&self, payload: &serde_json::Value) -> Result<()> {
+        let (ws_stream, _) = connect_async(&self.websocket_url).await
+            .map_err(|e| anyhow::anyhow!("Failed to connect to backend: {}", e))?;
+        let (mut write, _) = ws_stream.split();
+        let json = serde_json::to_string(payload)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize: {}", e))?;
+        write.send(Message::Text(json)).await
+            .map_err(|e| anyhow::anyhow!("Failed to send: {}", e))?;
+        let _ = write.close().await;
+        Ok(())
+    }
+
     pub async fn send_command(&self, command: Command) -> Result<()> {
         tracing::info!("Sending command to backend: {:?}", command);
         

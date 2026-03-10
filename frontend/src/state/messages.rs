@@ -99,6 +99,39 @@ pub enum Event {
     DockerfileGenerated { path: String, dockerfile: String },
     DockerfileSaved { path: String },
     DockerEngineLogs { logs: String },
+    NetworkTopology(NetworkTopologyData),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+pub enum NetworkDeviceType {
+    Gateway,
+    LocalMachine,
+    Host,
+    Unknown,
+}
+
+impl Default for NetworkDeviceType {
+    fn default() -> Self { NetworkDeviceType::Unknown }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct NetworkDevice {
+    pub ip: String,
+    pub mac: Option<String>,
+    pub hostname: Option<String>,
+    pub interface: String,
+    pub device_type: NetworkDeviceType,
+    pub is_reachable: bool,
+    pub vendor: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct NetworkTopologyData {
+    pub devices: Vec<NetworkDevice>,
+    pub gateway: Option<String>,
+    pub local_ip: Option<String>,
+    pub scan_time: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -144,6 +177,9 @@ pub enum Command {
     // System Commands
     SystemGetProcessList,
     SystemKillProcess { pid: String },
+
+    // Network Commands
+    NetworkScanDevices,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -989,7 +989,8 @@ impl DockerService {
             Command::VirtEnvList |
             Command::VirtEnvGetTemplates |
             Command::SystemGetProcessList |
-            Command::SystemKillProcess { .. } => {
+            Command::SystemKillProcess { .. } |
+            Command::NetworkScanDevices => {
                 // These commands are handled by other services, ignore them here
             }
         }
@@ -1452,6 +1453,7 @@ impl DockerService {
 }
 
 // Helper function to add directory contents to tar
+#[allow(dead_code)]
 fn add_directory_to_tar(tar: &mut TarBuilder<&mut Vec<u8>>, dir: &Path, prefix: &str) -> Result<()> {
     use std::fs::File;
     use std::io::Read;

@@ -1,6 +1,7 @@
 use crate::models::docker::{ContainerSummary, DockerStatsSummary, ImageSummary, NetworkSummary, VolumeSummary};
 use crate::models::system::{SystemSnapshot, ProcessInfo, Alert};
 use crate::models::virtenv::{VirtualEnvSummary, VirtualEnvironment, EnvironmentTemplate, PackageOperation};
+use crate::models::network::NetworkTopologyData;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -31,4 +32,5 @@ pub enum Event {
     DockerfileGenerated { path: String, dockerfile: String },
     DockerfileSaved { path: String },
     DockerEngineLogs { logs: String },
+    NetworkTopology(NetworkTopologyData),
 }
