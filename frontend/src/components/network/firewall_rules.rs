@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
-use dioxus::document;
-use serde::{Serialize, Deserialize};
+use crate::services::backend_client::{BackendClient, FirewallRule, FirewallAction, TrafficDirection};
 
 #[component]
 pub fn FirewallRules() -> Element {
@@ -10,75 +9,20 @@ pub fn FirewallRules() -> Element {
     let mut show_edit_dialog = use_signal(|| false);
     let mut editing_rule = use_signal(|| Option::<FirewallRule>::None);
     
-    // Load rules on mount
+    // Load rules from backend on mount
     use_effect(move || {
         spawn(async move {
-            // Try to load from localStorage first
-            let eval_result = document::eval(
-                r#"localStorage.getItem('firewall_rules')"#
-            ).await;
-            
-            if let Ok(result_value) = eval_result {
-                if let Ok(result_str) = serde_json::from_value::<String>(result_value.clone()) {
-                    if let Ok(loaded) = serde_json::from_str::<Vec<FirewallRule>>(&result_str) {
-                        rules.set(loaded);
-                        return;
-                    }
+            loading.set(true);
+            let client = BackendClient::new();
+            match client.get_firewall_rules().await {
+                Ok(loaded_rules) => {
+                    rules.set(loaded_rules);
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load firewall rules: {}", e);
                 }
             }
-            
-            // Generate mock data only if nothing in localStorage
-            let mock_rules = vec![
-                FirewallRule {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    name: "Allow SSH".to_string(),
-                    enabled: true,
-                    action: FirewallAction::Allow,
-                    direction: TrafficDirection::Inbound,
-                    protocol: Some("tcp".to_string()),
-                    source_ip: Some("0.0.0.0/0".to_string()),
-                    source_port: None,
-                    destination_ip: None,
-                    destination_port: Some(22),
-                },
-                FirewallRule {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    name: "Allow HTTP/HTTPS".to_string(),
-                    enabled: true,
-                    action: FirewallAction::Allow,
-                    direction: TrafficDirection::Inbound,
-                    protocol: Some("tcp".to_string()),
-                    source_ip: Some("0.0.0.0/0".to_string()),
-                    source_port: None,
-                    destination_ip: None,
-                    destination_port: Some(80),
-                },
-                FirewallRule {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    name: "Block Outbound SMTP".to_string(),
-                    enabled: false,
-                    action: FirewallAction::Deny,
-                    direction: TrafficDirection::Outbound,
-                    protocol: Some("tcp".to_string()),
-                    source_ip: None,
-                    source_port: None,
-                    destination_ip: Some("0.0.0.0/0".to_string()),
-                    destination_port: Some(25),
-                },
-            ];
-            rules.set(mock_rules);
-        });
-    });
-    
-    // Save to localStorage whenever rules change
-    use_effect(move || {
-        let rule_list = rules.read().clone();
-        spawn(async move {
-            if let Ok(json) = serde_json::to_string(&rule_list) {
-                let escaped = json.replace('\'', "\\\\'");
-                let script = format!("localStorage.setItem('firewall_rules', '{}')", escaped); 
-                let _ = document::eval(&script).await;
-            }
+            loading.set(false);
         });
     });
 
@@ -148,14 +92,18 @@ pub fn FirewallRules() -> Element {
                                     },
                                     on_delete: move |id| {
                                         tracing::info!("[FRONTEND] Deleting firewall rule: {}", id);
-                                        rules.write().retain(|r| r.id != id);
-                                        tracing::info!("[BACKEND REQUEST] Delete firewall rule: {}", id);
-                                        // Persist to localStorage
                                         spawn(async move {
-                                            if let Ok(json) = serde_json::to_string(&*rules.read()) {
-                                                let escaped = json.replace('\'', "\\\\'");
-                                                let script = format!("localStorage.setItem('firewall_rules', '{}')", escaped); 
-                                                let _ = document::eval(&script).await;
+                                            let client = BackendClient::new();
+                                            let cmd = serde_json::json!({
+                                                "type": "network_delete_firewall_rule",
+                                                "rule_id": id
+                                            });
+                                            if let Ok(_) = client.send_ws_command(&cmd).await {
+                                                tracing::info!("[BACKEND] Firewall rule deleted: {}", id);
+                                                // Reload rules after deletion
+                                                if let Ok(loaded_rules) = client.get_firewall_rules().await {
+                                                    rules.set(loaded_rules);
+                                                }
                                             }
                                         });
                                     }
@@ -189,15 +137,30 @@ pub fn FirewallRules() -> Element {
                     on_close: move |_| show_create_dialog.set(false),
                     on_create: move |rule: FirewallRule| {
                         tracing::info!("[FRONTEND] Firewall rule creation requested: {:?}", rule);
-                        tracing::info!("[BACKEND REQUEST] Creating firewall rule: name={}, action={:?}, direction={:?}, protocol={:?}, src={}:{:?}, dst={}:{:?}",
-                            rule.name, rule.action, rule.direction, rule.protocol,
-                            rule.source_ip.as_deref().unwrap_or("any"),
-                            rule.source_port,
-                            rule.destination_ip.as_deref().unwrap_or("any"),
-                            rule.destination_port
-                        );
-                        rules.write().push(rule.clone());
-                        tracing::info!("[FRONTEND] Firewall rule added to UI: {} (ID: {})", rule.name, rule.id);
+                        spawn(async move {
+                            let client = BackendClient::new();
+                            let cmd = serde_json::json!({
+                                "type": "network_create_firewall_rule",
+                                "request": {
+                                    "name": rule.name,
+                                    "action": format!("{:?}", rule.action),
+                                    "direction": format!("{:?}", rule.direction),
+                                    "protocol": rule.protocol,
+                                    "source_ip": rule.source_ip,
+                                    "source_port": rule.source_port,
+                                    "destination_ip": rule.destination_ip,
+                                    "destination_port": rule.destination_port,
+                                    "interface": None::<String>
+                                }
+                            });
+                            if let Ok(_) = client.send_ws_command(&cmd).await {
+                                tracing::info!("[BACKEND] Firewall rule created: {}", rule.name);
+                                // Reload rules after creation
+                                if let Ok(loaded_rules) = client.get_firewall_rules().await {
+                                    rules.set(loaded_rules);
+                                }
+                            }
+                        });
                         show_create_dialog.set(false);
                     }
                 }
@@ -567,30 +530,3 @@ fn CreateRuleDialog(
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct FirewallRule {
-    id: String,
-    name: String,
-    enabled: bool,
-    action: FirewallAction,
-    direction: TrafficDirection,
-    protocol: Option<String>,
-    source_ip: Option<String>,
-    source_port: Option<u16>,
-    destination_ip: Option<String>,
-    destination_port: Option<u16>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-enum FirewallAction {
-    Allow,
-    Deny,
-    Log,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-enum TrafficDirection {
-    Inbound,
-    Outbound,
-    Both,
-}

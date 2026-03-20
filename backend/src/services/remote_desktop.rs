@@ -1,18 +1,24 @@
 use anyhow::{anyhow, Context, Result};
+use crate::core::event_bus::EventBus;
+use crate::models::commands::Command;
+use crate::models::events::Event;
 use crate::models::remote_desktop::*;
 use std::collections::HashMap;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, RwLock};
+use tokio::fs;
 use tracing::{debug, info, warn};
 
 #[allow(dead_code)]
 #[derive(Clone)]
 pub struct RemoteDesktopService {
+    bus: EventBus,
     connections: Arc<RwLock<HashMap<String, RemoteConnection>>>,
     active_sessions: Arc<RwLock<HashMap<String, ActiveSession>>>,
     session_processes: Arc<RwLock<HashMap<String, SessionProcess>>>,
     groups: Arc<RwLock<HashMap<String, ConnectionGroup>>>,
+    command_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<Command>>>,
 }
 
 struct SessionProcess {
@@ -24,12 +30,14 @@ struct SessionProcess {
 
 #[allow(dead_code)]
 impl RemoteDesktopService {
-    pub fn new() -> Self {
+    pub fn new(bus: EventBus, command_rx: mpsc::Receiver<Command>) -> Self {
         Self {
+            bus,
             connections: Arc::new(RwLock::new(HashMap::new())),
             active_sessions: Arc::new(RwLock::new(HashMap::new())),
             session_processes: Arc::new(RwLock::new(HashMap::new())),
             groups: Arc::new(RwLock::new(HashMap::new())),
+            command_rx: Arc::new(tokio::sync::Mutex::new(command_rx)),
         }
     }
 
@@ -40,8 +48,9 @@ impl RemoteDesktopService {
         // Check for required clients
         self.check_client_availability().await?;
         
-        // Load saved connections from config
+        // Load saved connections and groups from config
         self.load_connections().await?;
+        self.load_groups().await?;
         
         Ok(())
     }
@@ -52,7 +61,7 @@ impl RemoteDesktopService {
         let mut missing = Vec::new();
 
         // Check SSH
-        if Command::new("ssh").arg("-V").output().is_ok() {
+        if std::process::Command::new("ssh").arg("-V").output().is_ok() {
             available.push("SSH");
         } else {
             missing.push("SSH (openssh-client)");
@@ -61,9 +70,9 @@ impl RemoteDesktopService {
         // Check RDP clients
         #[cfg(target_os = "linux")]
         {
-            if Command::new("xfreerdp").arg("--version").output().is_ok() {
+            if std::process::Command::new("xfreerdp").arg("--version").output().is_ok() {
                 available.push("RDP (xfreerdp)");
-            } else if Command::new("rdesktop").arg("-h").output().is_ok() {
+            } else if std::process::Command::new("rdesktop").arg("-h").output().is_ok() {
                 available.push("RDP (rdesktop)");
             } else {
                 missing.push("RDP (xfreerdp or rdesktop)");
@@ -83,7 +92,7 @@ impl RemoteDesktopService {
         }
 
         // Check VNC
-        if Command::new("vncviewer").arg("-h").output().is_ok() {
+        if std::process::Command::new("vncviewer").arg("-h").output().is_ok() {
             available.push("VNC");
         } else {
             missing.push("VNC (vncviewer)");
@@ -99,15 +108,84 @@ impl RemoteDesktopService {
 
     /// Load saved connections from configuration
     async fn load_connections(&self) -> Result<()> {
-        // In a real implementation, load from a config file or database
-        debug!("Loading saved connections");
+        let config_dir = Self::get_config_dir()?;
+        let file_path = config_dir.join("connections.json");
+        
+        if !file_path.exists() {
+            info!("No saved connections file found");
+            return Ok(());
+        }
+        
+        let json = fs::read_to_string(&file_path).await?;
+        let saved_connections: Vec<RemoteConnection> = serde_json::from_str(&json)?;
+        
+        let mut connections = self.connections.write().await;
+        for conn in saved_connections {
+            connections.insert(conn.id.clone(), conn);
+        }
+        
+        info!("Loaded {} saved connections", connections.len());
         Ok(())
     }
 
     /// Save connections to configuration
     async fn save_connections(&self) -> Result<()> {
-        // In a real implementation, save to a config file or database
-        debug!("Saving connections");
+        let config_dir = Self::get_config_dir()?;
+        fs::create_dir_all(&config_dir).await?;
+        
+        let file_path = config_dir.join("connections.json");
+        let connections = self.connections.read().await;
+        let connections_vec: Vec<&RemoteConnection> = connections.values().collect();
+        let json = serde_json::to_string_pretty(&connections_vec)?;
+        
+        fs::write(&file_path, json).await?;
+        info!("Saved {} connections to file", connections.len());
+        Ok(())
+    }
+
+    /// Get config directory for remote desktop data
+    fn get_config_dir() -> Result<std::path::PathBuf> {
+        let config_dir = dirs::config_dir()
+            .ok_or_else(|| anyhow!("Could not determine config directory"))?
+            .join("manager")
+            .join("remote_desktop");
+        Ok(config_dir)
+    }
+
+    /// Load saved groups from configuration
+    async fn load_groups(&self) -> Result<()> {
+        let config_dir = Self::get_config_dir()?;
+        let file_path = config_dir.join("groups.json");
+        
+        if !file_path.exists() {
+            info!("No saved groups file found");
+            return Ok(());
+        }
+        
+        let json = fs::read_to_string(&file_path).await?;
+        let saved_groups: Vec<ConnectionGroup> = serde_json::from_str(&json)?;
+        
+        let mut groups = self.groups.write().await;
+        for group in saved_groups {
+            groups.insert(group.id.clone(), group);
+        }
+        
+        info!("Loaded {} saved groups", groups.len());
+        Ok(())
+    }
+
+    /// Save groups to configuration
+    async fn save_groups(&self) -> Result<()> {
+        let config_dir = Self::get_config_dir()?;
+        fs::create_dir_all(&config_dir).await?;
+        
+        let file_path = config_dir.join("groups.json");
+        let groups = self.groups.read().await;
+        let groups_vec: Vec<&ConnectionGroup> = groups.values().collect();
+        let json = serde_json::to_string_pretty(&groups_vec)?;
+        
+        fs::write(&file_path, json).await?;
+        info!("Saved {} groups to file", groups.len());
         Ok(())
     }
 
@@ -424,7 +502,7 @@ impl RemoteDesktopService {
 
         debug!("Launching SSH: ssh {}", args.join(" "));
 
-        let child = Command::new("ssh")
+        let child = std::process::Command::new("ssh")
             .args(&args)
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
@@ -479,7 +557,7 @@ impl RemoteDesktopService {
 
             debug!("Launching RDP: xfreerdp {}", args.join(" "));
 
-            let child = Command::new("xfreerdp")
+            let child = std::process::Command::new("xfreerdp")
                 .args(&args)
                 .spawn()
                 .context("Failed to launch RDP client")?;
@@ -499,7 +577,7 @@ impl RemoteDesktopService {
             let temp_path = std::env::temp_dir().join(format!("stacksight_{}.rdp", uuid::Uuid::new_v4()));
             std::fs::write(&temp_path, rdp_content)?;
 
-            let child = Command::new("mstsc")
+            let child = std::process::Command::new("mstsc")
                 .arg(temp_path.to_str().unwrap())
                 .spawn()
                 .context("Failed to launch RDP client")?;
@@ -539,7 +617,7 @@ impl RemoteDesktopService {
 
         debug!("Launching VNC: vncviewer {}", args.join(" "));
 
-        let child = Command::new("vncviewer")
+        let child = std::process::Command::new("vncviewer")
             .args(&args)
             .spawn()
             .context("Failed to launch VNC client")?;
@@ -604,6 +682,12 @@ impl RemoteDesktopService {
 
         let mut groups = self.groups.write().await;
         groups.insert(group_id, group.clone());
+        drop(groups);
+        
+        // Save groups after creating
+        if let Err(e) = self.save_groups().await {
+            info!("Failed to save groups: {}", e);
+        }
 
         Ok(group)
     }
@@ -617,6 +701,12 @@ impl RemoteDesktopService {
         if !group.connections.contains(&connection_id.to_string()) {
             group.connections.push(connection_id.to_string());
         }
+        drop(groups);
+        
+        // Save groups after adding connection
+        if let Err(e) = self.save_groups().await {
+            info!("Failed to save groups: {}", e);
+        }
 
         Ok(())
     }
@@ -625,5 +715,128 @@ impl RemoteDesktopService {
     pub async fn get_groups(&self) -> Result<Vec<ConnectionGroup>> {
         let groups = self.groups.read().await;
         Ok(groups.values().cloned().collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::services::Service for RemoteDesktopService {
+    async fn start(&mut self) -> Result<()> {
+        info!("remote desktop service start");
+        self.initialize().await?;
+        Ok(())
+    }
+
+    async fn run(self) -> Result<()> {
+        info!("remote desktop service running");
+        let mut command_rx = self.command_rx.lock().await;
+        
+        loop {
+            tokio::select! {
+                cmd = command_rx.recv() => {
+                    match cmd {
+                        Some(Command::RemoteDesktopGetConnections) => {
+                            if let Ok(connections) = self.get_connections().await {
+                                self.bus.publish(Event::RemoteDesktopConnectionsUpdated { connections });
+                            }
+                        }
+                        Some(Command::RemoteDesktopCreateConnection { request }) => {
+                            match self.create_connection(request).await {
+                                Ok(_) => {
+                                    if let Ok(connections) = self.get_connections().await {
+                                        self.bus.publish(Event::RemoteDesktopConnectionsUpdated { connections });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to create connection: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::RemoteDesktopUpdateConnection { id, request }) => {
+                            match self.update_connection(&id, request).await {
+                                Ok(_) => {
+                                    if let Ok(connections) = self.get_connections().await {
+                                        self.bus.publish(Event::RemoteDesktopConnectionsUpdated { connections });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to update connection: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::RemoteDesktopDeleteConnection { id }) => {
+                            match self.delete_connection(&id).await {
+                                Ok(_) => {
+                                    if let Ok(connections) = self.get_connections().await {
+                                        self.bus.publish(Event::RemoteDesktopConnectionsUpdated { connections });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to delete connection: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::RemoteDesktopConnect { connection_id }) => {
+                            match self.connect(ConnectRequest { connection_id, override_credentials: None }).await {
+                                Ok(session) => {
+                                    if let Ok(sessions) = self.get_active_sessions().await {
+                                        self.bus.publish(Event::RemoteDesktopSessionsUpdated { sessions });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to connect: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::RemoteDesktopDisconnect { connection_id }) => {
+                            match self.disconnect(&connection_id).await {
+                                Ok(_) => {
+                                    if let Ok(sessions) = self.get_active_sessions().await {
+                                        self.bus.publish(Event::RemoteDesktopSessionsUpdated { sessions });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to disconnect: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::RemoteDesktopGetGroups) => {
+                            if let Ok(groups) = self.get_groups().await {
+                                self.bus.publish(Event::RemoteDesktopGroupsUpdated { groups });
+                            }
+                        }
+                        Some(Command::RemoteDesktopCreateGroup { name, color }) => {
+                            match self.create_group(name, color).await {
+                                Ok(_) => {
+                                    if let Ok(groups) = self.get_groups().await {
+                                        self.bus.publish(Event::RemoteDesktopGroupsUpdated { groups });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to create group: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::RemoteDesktopAddToGroup { group_id, connection_id }) => {
+                            match self.add_to_group(&group_id, &connection_id).await {
+                                Ok(_) => {
+                                    if let Ok(groups) = self.get_groups().await {
+                                        self.bus.publish(Event::RemoteDesktopGroupsUpdated { groups });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to add to group: {}", e) });
+                                }
+                            }
+                        }
+                        Some(_) => {} // other commands handled by other services
+                        None => {
+                            info!("remote desktop command channel closed");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }

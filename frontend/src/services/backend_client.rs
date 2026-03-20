@@ -74,6 +74,17 @@ pub enum Command {
     VirtEnvInstallPackages { operation: PackageOperation },
     VirtEnvList,
     VirtEnvGetTemplates,
+    NetworkGetRoutes,
+    NetworkAddRoute { destination: String, gateway: String, interface: Option<String>, metric: Option<u32> },
+    NetworkDeleteRoute { destination: String },
+    NetworkGetFirewallRules,
+    NetworkCreateFirewallRule { name: String, action: String, direction: String, protocol: Option<String>, source_ip: Option<String>, source_port: Option<u16>, destination_ip: Option<String>, destination_port: Option<u16> },
+    NetworkDeleteFirewallRule { rule_id: String },
+    NetworkGetInterfaces,
+    NetworkCreateVlan { vlan_id: u16, name: String, parent_interface: String, ip_address: Option<String>, netmask: Option<String> },
+    NetworkDeleteVlan { parent_interface: String, vlan_id: u16 },
+    RemoteDesktopGetConnections,
+    RemoteDesktopGetGroups,
 }
 
 pub struct BackendClient {
@@ -318,6 +329,125 @@ impl BackendClient {
     pub async fn get_templates(&self) -> Result<()> {
         self.send_command(Command::VirtEnvGetTemplates).await
     }
+    
+    // Network operations
+    pub async fn get_routes(&self) -> Result<Vec<Route>> {
+        let cmd = Command::NetworkGetRoutes;
+        let response = self.send_and_wait_for_event(
+            cmd,
+            |event_type, _| event_type == "network_routes_updated",
+            5
+        ).await?;
+        
+        // Extract routes from the event
+        if let Some(routes_array) = response.get("routes") {
+            let routes: Vec<Route> = serde_json::from_value(routes_array.clone())
+                .map_err(|e| anyhow::anyhow!("Failed to parse routes: {}", e))?;
+            Ok(routes)
+        } else {
+            Ok(vec![])
+        }
+    }
+    
+    pub async fn get_firewall_rules(&self) -> Result<Vec<FirewallRule>> {
+        let cmd = Command::NetworkGetFirewallRules;
+        let response = self.send_and_wait_for_event(
+            cmd,
+            |event_type, _| event_type == "network_firewall_rules_updated",
+            5
+        ).await?;
+        
+        if let Some(rules_array) = response.get("rules") {
+            let rules: Vec<FirewallRule> = serde_json::from_value(rules_array.clone())
+                .map_err(|e| anyhow::anyhow!("Failed to parse firewall rules: {}", e))?;
+            Ok(rules)
+        } else {
+            Ok(vec![])
+        }
+    }
+    
+    pub async fn get_network_interfaces(&self) -> Result<Vec<VlanConfig>> {
+        let cmd = Command::NetworkGetInterfaces;
+        let response = self.send_and_wait_for_event(
+            cmd,
+            |event_type, _| event_type == "NetworkInterfacesUpdated",
+            5
+        ).await?;
+        
+        if let Some(interfaces_array) = response.get("interfaces") {
+            // Backend sends NetworkInterface objects, each with a vlans array
+            // Extract all VLANs from all interfaces
+            let interfaces: Vec<NetworkInterfaceWrapper> = serde_json::from_value(interfaces_array.clone())
+                .map_err(|e| anyhow::anyhow!("Failed to parse interfaces: {}", e))?;
+            
+            let mut all_vlans = Vec::new();
+            for iface in interfaces {
+                all_vlans.extend(iface.vlans);
+            }
+            Ok(all_vlans)
+        } else {
+            Ok(vec![])
+        }
+    }
+}
+
+// Helper struct to parse NetworkInterface from backend
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct NetworkInterfaceWrapper {
+    vlans: Vec<VlanConfig>,
+}
+
+// Data types for network operations
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Route {
+    pub destination: String,
+    pub gateway: String,
+    pub interface: String,
+    pub metric: u32,
+    pub route_type: RouteType,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+pub enum RouteType {
+    Static,
+    Dynamic,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct FirewallRule {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub action: FirewallAction,
+    pub direction: TrafficDirection,
+    pub protocol: Option<String>,
+    pub source_ip: Option<String>,
+    pub source_port: Option<u16>,
+    pub destination_ip: Option<String>,
+    pub destination_port: Option<u16>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+pub enum FirewallAction {
+    Allow,
+    Deny,
+    Log,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+pub enum TrafficDirection {
+    Inbound,
+    Outbound,
+    Both,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct VlanConfig {
+    pub id: u16,
+    pub name: String,
+    pub parent_interface: String,
+    pub ip_config: Option<String>,
+    pub enabled: bool,
 }
 
 impl Default for BackendClient {

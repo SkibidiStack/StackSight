@@ -51,14 +51,14 @@ pub struct VlanConfig {
     pub id: u16,
     pub name: String,
     pub parent_interface: String,
-    pub ip_config: Option<IpConfiguration>,
+    pub ip_config: Option<String>,
     pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Route {
     pub destination: String,
-    pub gateway: IpAddr,
+    pub gateway: String,
     pub interface: String,
     pub metric: u32,
     pub route_type: RouteType,
@@ -78,7 +78,7 @@ pub struct FirewallRule {
     pub enabled: bool,
     pub action: FirewallAction,
     pub direction: TrafficDirection,
-    pub protocol: Option<Protocol>,
+    pub protocol: Option<String>,
     pub source_ip: Option<String>,
     pub source_port: Option<u16>,
     pub destination_ip: Option<String>,
@@ -101,6 +101,7 @@ pub enum TrafficDirection {
     Both,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Protocol {
     Tcp,
@@ -214,7 +215,7 @@ pub struct CreateFirewallRuleRequest {
     pub name: String,
     pub action: FirewallAction,
     pub direction: TrafficDirection,
-    pub protocol: Option<Protocol>,
+    pub protocol: Option<String>,
     pub source_ip: Option<String>,
     pub source_port: Option<u16>,
     pub destination_ip: Option<String>,

@@ -33,4 +33,11 @@ pub enum Event {
     DockerfileSaved { path: String },
     DockerEngineLogs { logs: String },
     NetworkTopology(NetworkTopologyData),
+    NetworkRoutesUpdated { routes: Vec<crate::models::network::Route> },
+    NetworkFirewallRulesUpdated { rules: Vec<crate::models::network::FirewallRule> },
+    NetworkInterfacesUpdated { interfaces: Vec<crate::models::network::NetworkInterface> },
+    RemoteDesktopConnectionsUpdated { connections: Vec<crate::models::remote_desktop::RemoteConnection> },
+    RemoteDesktopGroupsUpdated { groups: Vec<crate::models::remote_desktop::ConnectionGroup> },
+    RemoteDesktopSessionsUpdated { sessions: Vec<crate::models::remote_desktop::ActiveSession> },
+    Error { message: String },
 }

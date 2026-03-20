@@ -1,6 +1,13 @@
 use crate::core::event_bus::EventBus;
 use crate::models::{commands::Command, events::Event};
-use crate::services::{communication::CommunicationService, docker::DockerService, network::NetworkService, system::SystemService, virtenv::VirtualEnvService};
+use crate::services::{
+    communication::CommunicationService, 
+    docker::DockerService, 
+    network::NetworkService, 
+    remote_desktop::RemoteDesktopService,
+    system::SystemService, 
+    virtenv::VirtualEnvService
+};
 use crate::services::{filesystem::FileSystemService, ServiceHandle};
 use crate::{core::config::AppConfig, core::error::CoreError};
 use anyhow::Result;
@@ -23,6 +30,7 @@ impl ServiceManager {
         let (virtenv_cmd_tx, virtenv_cmd_rx) = mpsc::channel::<Command>(128);
         let (system_cmd_tx, system_cmd_rx) = mpsc::channel::<Command>(128);
         let (network_cmd_tx, network_cmd_rx) = mpsc::channel::<Command>(128);
+        let (remote_desktop_cmd_tx, remote_desktop_cmd_rx) = mpsc::channel::<Command>(128);
 
         // Main command channel for incoming commands from communication service
         let (main_cmd_tx, mut main_cmd_rx) = mpsc::channel::<Command>(128);
@@ -32,6 +40,7 @@ impl ServiceManager {
         let virtenv_tx = virtenv_cmd_tx.clone();
         let system_tx = system_cmd_tx.clone();
         let net_tx = network_cmd_tx.clone();
+        let rd_tx = remote_desktop_cmd_tx.clone();
         tokio::spawn(async move {
             while let Some(cmd) = main_cmd_rx.recv().await {
                 match &cmd {
@@ -48,8 +57,28 @@ impl ServiceManager {
                     Command::SystemKillProcess { .. } => {
                         let _ = system_tx.send(cmd).await;
                     }
-                    Command::NetworkScanDevices => {
+                    Command::NetworkScanDevices |
+                    Command::NetworkAddRoute { .. } |
+                    Command::NetworkDeleteRoute { .. } |
+                    Command::NetworkGetRoutes |
+                    Command::NetworkCreateFirewallRule { .. } |
+                    Command::NetworkDeleteFirewallRule { .. } |
+                    Command::NetworkGetFirewallRules |
+                    Command::NetworkCreateVlan { .. } |
+                    Command::NetworkDeleteVlan { .. } |
+                    Command::NetworkGetInterfaces => {
                         let _ = net_tx.send(cmd).await;
+                    }
+                    Command::RemoteDesktopCreateConnection { .. } |
+                    Command::RemoteDesktopUpdateConnection { .. } |
+                    Command::RemoteDesktopDeleteConnection { .. } |
+                    Command::RemoteDesktopGetConnections |
+                    Command::RemoteDesktopConnect { .. } |
+                    Command::RemoteDesktopDisconnect { .. } |
+                    Command::RemoteDesktopCreateGroup { .. } |
+                    Command::RemoteDesktopAddToGroup { .. } |
+                    Command::RemoteDesktopGetGroups => {
+                        let _ = rd_tx.send(cmd).await;
                     }
                     _ => {
                         // Docker and other commands
@@ -64,6 +93,7 @@ impl ServiceManager {
         services.push(ServiceHandle::System(SystemService::new(bus.clone(), system_cmd_rx).await?));
         services.push(ServiceHandle::FileSystem(FileSystemService::new(bus.clone()).await?));
         services.push(ServiceHandle::Network(NetworkService::new(bus.clone(), network_cmd_rx).await?));
+        services.push(ServiceHandle::RemoteDesktop(RemoteDesktopService::new(bus.clone(), remote_desktop_cmd_rx)));
         services.push(ServiceHandle::Communication(CommunicationService::new(bus.clone(), main_cmd_tx).await?));
 
         Ok(Self { config, bus, services })

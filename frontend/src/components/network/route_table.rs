@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
-use dioxus::document;
-use serde::{Serialize, Deserialize};
+use crate::services::backend_client::{BackendClient, Route, RouteType};
 
 #[component]
 pub fn RouteTable() -> Element {
@@ -10,60 +9,20 @@ pub fn RouteTable() -> Element {
     let mut show_edit_dialog = use_signal(|| false);
     let mut editing_route = use_signal(|| Option::<Route>::None);
     
-    // Load routes on mount
+    // Load routes from backend on mount
     use_effect(move || {
         spawn(async move {
-            // Try to load from localStorage first
-            let eval_result = document::eval(
-                r#"localStorage.getItem('network_routes')"#
-            ).await;
-            
-            if let Ok(result_value) = eval_result {
-                if let Ok(result_str) = serde_json::from_value::<String>(result_value.clone()) {
-                    if let Ok(loaded) = serde_json::from_str::<Vec<Route>>(&result_str) {
-                        routes.set(loaded);
-                        return;
-                    }
+            loading.set(true);
+            let client = BackendClient::new();
+            match client.get_routes().await {
+                Ok(loaded_routes) => {
+                    routes.set(loaded_routes);
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load routes: {}", e);
                 }
             }
-            
-            // Generate mock data only if nothing in localStorage
-            let mock_routes = vec![
-                Route {
-                    destination: "0.0.0.0/0".to_string(),
-                    gateway: "192.168.1.1".to_string(),
-                    interface: "eth0".to_string(),
-                    metric: 100,
-                    route_type: RouteType::Static,
-                },
-                Route {
-                    destination: "192.168.1.0/24".to_string(),
-                    gateway: "0.0.0.0".to_string(),
-                    interface: "eth0".to_string(),
-                    metric: 0,
-                    route_type: RouteType::Static,
-                },
-                Route {
-                    destination: "10.0.0.0/8".to_string(),
-                    gateway: "192.168.1.254".to_string(),
-                    interface: "eth0".to_string(),
-                    metric: 200,
-                    route_type: RouteType::Static,
-                },
-            ];
-            routes.set(mock_routes);
-        });
-    });
-    
-    // Save to localStorage whenever routes change
-    use_effect(move || {
-        let route_list = routes.read().clone();
-        spawn(async move {
-            if let Ok(json) = serde_json::to_string(&route_list) {
-                let escaped = json.replace('\'', "\\\\'");
-                let script = format!("localStorage.setItem('network_routes', '{}')", escaped); 
-                let _ = document::eval(&script).await;
-            }
+            loading.set(false);
         });
     });
 
@@ -125,16 +84,20 @@ pub fn RouteTable() -> Element {
                                         editing_route.set(Some(r));
                                         show_edit_dialog.set(true);
                                     },
-                                    on_delete: move |dest| {
+                                    on_delete: move |dest: String| {
                                         tracing::info!("[FRONTEND] Deleting route: {}", dest);
-                                        routes.write().retain(|r| r.destination != dest);
-                                        tracing::info!("[BACKEND REQUEST] Delete route: {}", dest);
-                                        // Persist to localStorage
                                         spawn(async move {
-                                            if let Ok(json) = serde_json::to_string(&*routes.read()) {
-                                                let escaped = json.replace('\'', "\\\\'");
-                                                let script = format!("localStorage.setItem('network_routes', '{}')", escaped); 
-                                                let _ = document::eval(&script).await;
+                                            let client = BackendClient::new();
+                                            let cmd = serde_json::json!({
+                                                "type": "network_delete_route",
+                                                "destination": dest
+                                            });
+                                            if let Ok(_) = client.send_ws_command(&cmd).await {
+                                                tracing::info!("[BACKEND] Route deleted: {}", dest);
+                                                // Reload routes after deletion
+                                                if let Ok(loaded_routes) = client.get_routes().await {
+                                                    routes.set(loaded_routes);
+                                                }
                                             }
                                         });
                                     }
@@ -168,10 +131,25 @@ pub fn RouteTable() -> Element {
                     on_close: move |_| show_add_dialog.set(false),
                     on_add: move |route: Route| {
                         tracing::info!("[FRONTEND] Route creation requested: {:?}", route);
-                        tracing::info!("[BACKEND REQUEST] Adding route: dest={}, gateway={}, interface={}, metric={}",
-                            route.destination, route.gateway, route.interface, route.metric);
-                        routes.write().push(route.clone());
-                        tracing::info!("[FRONTEND] Route added to UI: {} via {}", route.destination, route.gateway);
+                        spawn(async move {
+                            let client = BackendClient::new();
+                            let cmd = serde_json::json!({
+                                "type": "network_add_route",
+                                "request": {
+                                    "destination": route.destination,
+                                    "gateway": route.gateway,
+                                    "interface": Some(route.interface),
+                                    "metric": Some(route.metric)
+                                }
+                            });
+                            if let Ok(_) = client.send_ws_command(&cmd).await {
+                                tracing::info!("[BACKEND] Route added: {} via {}", route.destination, route.gateway);
+                                // Reload routes after creation
+                                if let Ok(loaded_routes) = client.get_routes().await {
+                                    routes.set(loaded_routes);
+                                }
+                            }
+                        });
                         show_add_dialog.set(false);
                     }
                 }
@@ -390,18 +368,3 @@ fn AddRouteDialog(
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct Route {
-    destination: String,
-    gateway: String,
-    interface: String,
-    metric: u32,
-    route_type: RouteType,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-enum RouteType {
-    Static,
-    Dynamic,
-    Default,
-}

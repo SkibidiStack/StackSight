@@ -8,6 +8,7 @@ use std::net::IpAddr;
 use std::process::Command as SysCommand;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
+use tokio::fs;
 use tracing::{debug, info};
 
 #[allow(dead_code)]
@@ -16,6 +17,7 @@ pub struct NetworkService {
     interfaces: Arc<RwLock<HashMap<String, NetworkInterface>>>,
     routes: Arc<RwLock<Vec<Route>>>,
     firewall_rules: Arc<RwLock<HashMap<String, FirewallRule>>>,
+    vlans: Arc<RwLock<Vec<VlanConfig>>>,
     command_rx: mpsc::Receiver<Command>,
 }
 
@@ -27,6 +29,7 @@ impl NetworkService {
             interfaces: Arc::new(RwLock::new(HashMap::new())),
             routes: Arc::new(RwLock::new(Vec::new())),
             firewall_rules: Arc::new(RwLock::new(HashMap::new())),
+            vlans: Arc::new(RwLock::new(Vec::new())),
             command_rx,
         })
     }
@@ -35,6 +38,11 @@ impl NetworkService {
     pub async fn initialize(&self) -> Result<()> {
         info!("Initializing network service");
         
+        // Load saved user configurations
+        self.load_routes().await?;
+        self.load_firewall_rules().await?;
+        self.load_vlans().await?;
+        
         self.refresh_interfaces().await?;
         self.refresh_routes().await?;
         self.refresh_firewall_rules().await?;
@@ -42,10 +50,142 @@ impl NetworkService {
         Ok(())
     }
 
+    /// Get config directory for network data
+    fn get_config_dir() -> Result<std::path::PathBuf> {
+        let config_dir = dirs::config_dir()
+            .ok_or_else(|| anyhow!("Could not determine config directory"))?
+            .join("manager")
+            .join("network");
+        Ok(config_dir)
+    }
+
+    /// Load saved routes from file
+    async fn load_routes(&self) -> Result<()> {
+        let config_dir = Self::get_config_dir()?;
+        let file_path = config_dir.join("routes.json");
+        
+        if !file_path.exists() {
+            info!("No saved routes file found");
+            return Ok(());
+        }
+        
+        let json = fs::read_to_string(&file_path).await?;
+        let saved_routes: Vec<Route> = serde_json::from_str(&json)?;
+        
+        let mut routes = self.routes.write().await;
+        for route in saved_routes {
+            routes.push(route);
+        }
+        
+        info!("Loaded {} saved routes", routes.len());
+        Ok(())
+    }
+
+    /// Save routes to file
+    async fn save_routes(&self) -> Result<()> {
+        let config_dir = Self::get_config_dir()?;
+        fs::create_dir_all(&config_dir).await?;
+        
+        let file_path = config_dir.join("routes.json");
+        let routes = self.routes.read().await;
+        let json = serde_json::to_string_pretty(&*routes)?;
+        
+        fs::write(&file_path, json).await?;
+        info!("Saved {} routes to file", routes.len());
+        Ok(())
+    }
+
+    /// Load saved firewall rules from file
+    async fn load_firewall_rules(&self) -> Result<()> {
+        let config_dir = Self::get_config_dir()?;
+        let file_path = config_dir.join("firewall_rules.json");
+        
+        if !file_path.exists() {
+            info!("No saved firewall rules file found");
+            return Ok(());
+        }
+        
+        let json = fs::read_to_string(&file_path).await?;
+        let saved_rules: Vec<FirewallRule> = serde_json::from_str(&json)?;
+        
+        let mut rules = self.firewall_rules.write().await;
+        for rule in saved_rules {
+            rules.insert(rule.id.clone(), rule);
+        }
+        
+        info!("Loaded {} saved firewall rules", rules.len());
+        Ok(())
+    }
+
+    /// Save firewall rules to file
+    async fn save_firewall_rules(&self) -> Result<()> {
+        let config_dir = Self::get_config_dir()?;
+        fs::create_dir_all(&config_dir).await?;
+        
+        let file_path = config_dir.join("firewall_rules.json");
+        let rules = self.firewall_rules.read().await;
+        let rules_vec: Vec<&FirewallRule> = rules.values().collect();
+        let json = serde_json::to_string_pretty(&rules_vec)?;
+        
+        fs::write(&file_path, json).await?;
+        info!("Saved {} firewall rules to file", rules.len());
+        Ok(())
+    }
+
+    /// Load saved VLANs from file
+    async fn load_vlans(&self) -> Result<()> {
+        let config_dir = Self::get_config_dir()?;
+        let file_path = config_dir.join("vlans.json");
+        
+        if !file_path.exists() {
+            info!("No saved VLANs file found");
+            return Ok(());
+        }
+        
+        let json = fs::read_to_string(&file_path).await?;
+        let saved_vlans: Vec<VlanConfig> = serde_json::from_str(&json)?;
+        
+        let mut vlans = self.vlans.write().await;
+        *vlans = saved_vlans;
+        
+        info!("Loaded {} saved VLANs", vlans.len());
+        Ok(())
+    }
+
+    /// Save VLANs to file
+    async fn save_vlans(&self) -> Result<()> {
+        let config_dir = Self::get_config_dir()?;
+        fs::create_dir_all(&config_dir).await?;
+        
+        let file_path = config_dir.join("vlans.json");
+        let interfaces = self.interfaces.read().await;
+        
+        // Extract VLANs from interfaces
+        let mut vlans_by_interface: HashMap<String, Vec<VlanConfig>> = HashMap::new();
+        for (name, iface) in interfaces.iter() {
+            if !iface.vlans.is_empty() {
+                vlans_by_interface.insert(name.clone(), iface.vlans.clone());
+            }
+        }
+        
+        let json = serde_json::to_string_pretty(&vlans_by_interface)?;
+        fs::write(&file_path, json).await?;
+        
+        info!("Saved VLANs for {} interfaces", vlans_by_interface.len());
+        Ok(())
+    }
+
     /// Get all network interfaces
     pub async fn get_interfaces(&self) -> Result<Vec<NetworkInterface>> {
         let interfaces = self.interfaces.read().await;
         Ok(interfaces.values().cloned().collect())
+    }
+
+    /// Get all VLANs across all interfaces as a flat list
+    pub async fn get_all_vlans(&self) -> Result<Vec<VlanConfig>> {
+        let vlans = self.vlans.read().await;
+        info!("Returning {} VLANs total", vlans.len());
+        Ok(vlans.clone())
     }
 
     /// Get a specific network interface by name
@@ -218,84 +358,46 @@ impl NetworkService {
     pub async fn create_vlan(&self, request: CreateVlanRequest) -> Result<VlanConfig> {
         info!("Creating VLAN {} on interface {}", request.vlan_id, request.parent_interface);
 
-        #[cfg(target_os = "linux")]
-        {
-            let vlan_name = format!("{}.{}", request.parent_interface, request.vlan_id);
-            
-            // Create VLAN interface
-            let output = SysCommand::new("ip")
-                .args(&[
-                    "link",
-                    "add",
-                    "link",
-                    &request.parent_interface,
-                    "name",
-                    &vlan_name,
-                    "type",
-                    "vlan",
-                    "id",
-                    &request.vlan_id.to_string(),
-                ])
-                .output()
-                .context("Failed to create VLAN")?;
+        let vlan_config = VlanConfig {
+            id: request.vlan_id,
+            name: request.name.clone(),
+            parent_interface: request.parent_interface.clone(),
+            ip_config: None,
+            enabled: true,
+        };
+        
+        // Add to VLANs collection FIRST
+        let mut vlans = self.vlans.write().await;
+        vlans.push(vlan_config.clone());
+        drop(vlans);
+        
+        // Save immediately
+        self.save_vlans().await?;
+        info!("VLAN {} added to collection and saved", request.vlan_id);
 
-            if !output.status.success() {
-                return Err(anyhow!("Failed to create VLAN: {}", String::from_utf8_lossy(&output.stderr)));
-            }
-
-            // Configure IP if provided
-            if let (Some(ip), Some(netmask)) = (request.ip_address, request.netmask) {
-                SysCommand::new("ip")
-                    .args(&["addr", "add", &format!("{}/{}", ip, netmask), "dev", &vlan_name])
-                    .output()
-                    .context("Failed to configure VLAN IP")?;
-            }
-
-            // Bring interface up
-            SysCommand::new("ip")
-                .args(&["link", "set", &vlan_name, "up"])
-                .output()
-                .context("Failed to bring up VLAN")?;
-
-            Ok(VlanConfig {
-                id: request.vlan_id,
-                name: vlan_name,
-                parent_interface: request.parent_interface,
-                ip_config: None,
-                enabled: true,
-            })
-        }
-
-        #[cfg(not(target_os = "linux"))]
-        {
-            Err(anyhow!("VLAN creation not implemented for this platform"))
-        }
+        Ok(vlan_config)
     }
 
     /// Delete a VLAN
-    pub async fn delete_vlan(&self, parent_interface: &str, vlan_id: u16) -> Result<()> {
-        info!("Deleting VLAN {} from interface {}", vlan_id, parent_interface);
+    pub async fn delete_vlan(&self, _parent_interface: &str, vlan_id: u16) -> Result<()> {
+        info!("Deleting VLAN {}", vlan_id);
 
-        #[cfg(target_os = "linux")]
-        {
-            let vlan_name = format!("{}.{}", parent_interface, vlan_id);
-            
-            let output = SysCommand::new("ip")
-                .args(&["link", "delete", &vlan_name])
-                .output()
-                .context("Failed to delete VLAN")?;
-
-            if !output.status.success() {
-                return Err(anyhow!("Failed to delete VLAN: {}", String::from_utf8_lossy(&output.stderr)));
-            }
-
-            Ok(())
+        // Remove from VLANs collection
+        let mut vlans = self.vlans.write().await;
+        let original_len = vlans.len();
+        vlans.retain(|v| v.id != vlan_id);
+        
+        if vlans.len() == original_len {
+            return Err(anyhow!("VLAN {} not found", vlan_id));
+        }
+        drop(vlans);
+        
+        // Save VLANs after deleting
+        if let Err(e) = self.save_vlans().await {
+            info!("Failed to save VLANs: {}", e);
         }
 
-        #[cfg(not(target_os = "linux"))]
-        {
-            Err(anyhow!("VLAN deletion not implemented for this platform"))
-        }
+        Ok(())
     }
 
     /// Update interface configuration
@@ -384,6 +486,12 @@ impl NetworkService {
         }
 
         self.refresh_routes().await?;
+        
+        // Save routes after adding
+        if let Err(e) = self.save_routes().await {
+            info!("Failed to save routes: {}", e);
+        }
+        
         Ok(())
     }
 
@@ -404,6 +512,12 @@ impl NetworkService {
         }
 
         self.refresh_routes().await?;
+        
+        // Save routes after deleting
+        if let Err(e) = self.save_routes().await {
+            info!("Failed to save routes: {}", e);
+        }
+        
         Ok(())
     }
 
@@ -458,13 +572,7 @@ impl NetworkService {
             let mut args = vec!["-A", chain];
             
             if let Some(proto) = &request.protocol {
-                let proto_str = match proto {
-                    Protocol::Tcp => "tcp",
-                    Protocol::Udp => "udp",
-                    Protocol::Icmp => "icmp",
-                    Protocol::Any => "all",
-                };
-                args.extend_from_slice(&["-p", proto_str]);
+                args.extend_from_slice(&["-p", proto]);
             }
 
             if let Some(src_ip) = &request.source_ip {
@@ -500,6 +608,12 @@ impl NetworkService {
 
         let mut rules = self.firewall_rules.write().await;
         rules.insert(rule.id.clone(), rule.clone());
+        
+        // Save firewall rules after creating
+        drop(rules); // Release lock before save
+        if let Err(e) = self.save_firewall_rules().await {
+            info!("Failed to save firewall rules: {}", e);
+        }
 
         Ok(rule)
     }
@@ -511,6 +625,12 @@ impl NetworkService {
         let mut rules = self.firewall_rules.write().await;
         rules.remove(rule_id)
             .ok_or_else(|| anyhow!("Firewall rule not found"))?;
+        
+        // Save firewall rules after deleting
+        drop(rules); // Release lock before save
+        if let Err(e) = self.save_firewall_rules().await {
+            info!("Failed to save firewall rules: {}", e);
+        }
 
         Ok(())
     }
@@ -839,6 +959,138 @@ impl crate::services::Service for NetworkService {
                             tokio::spawn(async move {
                                 NetworkService::scan_devices(&bus).await;
                             });
+                        }
+                        Some(Command::NetworkAddRoute { request }) => {
+                            info!("[NETWORK] Received NetworkAddRoute command: dest={} gw={}", request.destination, request.gateway);
+                            let result = self.add_route(request).await;
+                            match result {
+                                Ok(()) => {
+                                    if let Ok(routes) = self.get_routes().await {
+                                        self.bus.publish(Event::NetworkRoutesUpdated { routes });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to add route: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::NetworkDeleteRoute { destination }) => {
+                            let result = self.delete_route(&destination).await;
+                            match result {
+                                Ok(()) => {
+                                    if let Ok(routes) = self.get_routes().await {
+                                        self.bus.publish(Event::NetworkRoutesUpdated { routes });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to delete route: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::NetworkGetRoutes) => {
+                            if let Ok(routes) = self.get_routes().await {
+                                self.bus.publish(Event::NetworkRoutesUpdated { routes });
+                            }
+                        }
+                        Some(Command::NetworkCreateFirewallRule { request }) => {
+                            info!("[NETWORK] Received NetworkCreateFirewallRule command: name={}", request.name);
+                            let result = self.create_firewall_rule(request).await;
+                            match result {
+                                Ok(rule) => {
+                                    if let Ok(rules) = self.get_firewall_rules().await {
+                                        self.bus.publish(Event::NetworkFirewallRulesUpdated { rules });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to create firewall rule: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::NetworkDeleteFirewallRule { rule_id }) => {
+                            let result = self.delete_firewall_rule(&rule_id).await;
+                            match result {
+                                Ok(()) => {
+                                    if let Ok(rules) = self.get_firewall_rules().await {
+                                        self.bus.publish(Event::NetworkFirewallRulesUpdated { rules });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to delete firewall rule: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::NetworkGetFirewallRules) => {
+                            if let Ok(rules) = self.get_firewall_rules().await {
+                                self.bus.publish(Event::NetworkFirewallRulesUpdated { rules });
+                            }
+                        }
+                        Some(Command::NetworkCreateVlan { request }) => {
+                            info!("[NETWORK] Received NetworkCreateVlan command: id={} name={}", request.vlan_id, request.name);
+                            let result = self.create_vlan(request).await;
+                            match result {
+                                Ok(_vlan) => {
+                                    if let Ok(vlans) = self.get_all_vlans().await {
+                                        self.bus.publish(Event::NetworkInterfacesUpdated { interfaces: vlans.into_iter().map(|v| {
+                                            NetworkInterface {
+                                                name: format!("{}.{}", v.parent_interface, v.id),
+                                                display_name: v.name.clone(),
+                                                mac_address: None,
+                                                ip_addresses: vec![],
+                                                status: InterfaceStatus::Up,
+                                                mtu: 1500,
+                                                speed: None,
+                                                interface_type: InterfaceType::Vlan,
+                                                vlans: vec![v],
+                                            }
+                                        }).collect() });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to create VLAN: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::NetworkDeleteVlan { parent_interface, vlan_id }) => {
+                            let result = self.delete_vlan(&parent_interface, vlan_id).await;
+                            match result {
+                                Ok(()) => {
+                                    if let Ok(vlans) = self.get_all_vlans().await {
+                                        self.bus.publish(Event::NetworkInterfacesUpdated { interfaces: vlans.into_iter().map(|v| {
+                                            NetworkInterface {
+                                                name: format!("{}.{}", v.parent_interface, v.id),
+                                                display_name: v.name.clone(),
+                                                mac_address: None,
+                                                ip_addresses: vec![],
+                                                status: InterfaceStatus::Up,
+                                                mtu: 1500,
+                                                speed: None,
+                                                interface_type: InterfaceType::Vlan,
+                                                vlans: vec![v],
+                                            }
+                                        }).collect() });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to delete VLAN: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::NetworkGetInterfaces) => {
+                            if let Ok(vlans) = self.get_all_vlans().await {
+                                self.bus.publish(Event::NetworkInterfacesUpdated { interfaces: vlans.into_iter().map(|v| {
+                                    NetworkInterface {
+                                        name: format!("{}.{}", v.parent_interface, v.id),
+                                        display_name: v.name.clone(),
+                                        mac_address: None,
+                                        ip_addresses: vec![],
+                                        status: InterfaceStatus::Up,
+                                        mtu: 1500,
+                                        speed: None,
+                                        interface_type: InterfaceType::Vlan,
+                                        vlans: vec![v],
+                                    }
+                                }).collect() });
+                            }
                         }
                         Some(_) => {} // other commands handled by other services
                         None => {

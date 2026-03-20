@@ -46,6 +46,26 @@ pub enum Command {
 
     // Network Commands
     NetworkScanDevices,
+    NetworkAddRoute { request: crate::models::network::AddRouteRequest },
+    NetworkDeleteRoute { destination: String },
+    NetworkGetRoutes,
+    NetworkCreateFirewallRule { request: crate::models::network::CreateFirewallRuleRequest },
+    NetworkDeleteFirewallRule { rule_id: String },
+    NetworkGetFirewallRules,
+    NetworkCreateVlan { request: crate::models::network::CreateVlanRequest },
+    NetworkDeleteVlan { parent_interface: String, vlan_id: u16 },
+    NetworkGetInterfaces,
+    
+    // Remote Desktop Commands
+    RemoteDesktopCreateConnection { request: crate::models::remote_desktop::CreateConnectionRequest },
+    RemoteDesktopUpdateConnection { id: String, request: crate::models::remote_desktop::UpdateConnectionRequest },
+    RemoteDesktopDeleteConnection { id: String },
+    RemoteDesktopGetConnections,
+    RemoteDesktopConnect { connection_id: String },
+    RemoteDesktopDisconnect { connection_id: String },
+    RemoteDesktopCreateGroup { name: String, color: Option<String> },
+    RemoteDesktopAddToGroup { group_id: String, connection_id: String },
+    RemoteDesktopGetGroups,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

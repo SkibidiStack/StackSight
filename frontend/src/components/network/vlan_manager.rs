@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
-use dioxus::document;
-use serde::{Serialize, Deserialize};
+use crate::services::backend_client::{BackendClient, VlanConfig};
 
 #[component]
 pub fn VlanManager() -> Element {
@@ -10,59 +9,17 @@ pub fn VlanManager() -> Element {
     let mut show_edit_dialog = use_signal(|| false);
     let mut editing_vlan = use_signal(|| Option::<VlanConfig>::None);
     
-    // Load VLANs on mount
+    // Load VLANs from backend on mount
     use_effect(move || {
         spawn(async move {
-            // Try to load from localStorage first
-            let eval_result = document::eval(
-                r#"localStorage.getItem('network_vlans')"#
-            ).await;
-            
-            if let Ok(result_value) = eval_result {
-                if let Ok(result_str) = serde_json::from_value::<String>(result_value.clone()) {
-                    if let Ok(loaded) = serde_json::from_str::<Vec<VlanConfig>>(&result_str) {
-                        vlans.set(loaded);
-                        return;
-                    }
+            let client = BackendClient::new();
+            match client.get_network_interfaces().await {
+                Ok(loaded_vlans) => {
+                    vlans.set(loaded_vlans);
                 }
-            }
-            
-            // Generate mock data only if nothing in localStorage
-            let mock_vlans = vec![
-                VlanConfig {
-                    id: 10,
-                    name: "production".to_string(),
-                    parent_interface: "eth0".to_string(),
-                    ip_config: Some("192.168.10.1/24".to_string()),
-                    enabled: true,
-                },
-                VlanConfig {
-                    id: 20,
-                    name: "development".to_string(),
-                    parent_interface: "eth0".to_string(),
-                    ip_config: Some("192.168.20.1/24".to_string()),
-                    enabled: true,
-                },
-                VlanConfig {
-                    id: 30,
-                    name: "guest".to_string(),
-                    parent_interface: "eth1".to_string(),
-                    ip_config: Some("192.168.30.1/24".to_string()),
-                    enabled: false,
-                },
-            ];
-            vlans.set(mock_vlans);
-        });
-    });
-    
-    // Save to localStorage whenever VLANs change
-    use_effect(move || {
-        let vlan_list = vlans.read().clone();
-        spawn(async move {
-            if let Ok(json) = serde_json::to_string(&vlan_list) {
-                let escaped = json.replace('\'', "\\\\'");
-                let script = format!("localStorage.setItem('network_vlans', '{}')", escaped); 
-                let _ = document::eval(&script).await;
+                Err(e) => {
+                    tracing::error!("Failed to load VLANs: {}", e);
+                }
             }
         });
     });
@@ -123,16 +80,21 @@ pub fn VlanManager() -> Element {
                                         editing_vlan.set(Some(v));
                                         show_edit_dialog.set(true);
                                     },
-                                    on_delete: move |id| {
+                                    on_delete: move |id: u16| {
                                         tracing::info!("[FRONTEND] Deleting VLAN ID: {}", id);
-                                        vlans.write().retain(|v| v.id != id);
-                                        tracing::info!("[BACKEND REQUEST] Delete VLAN: {}", id);
-                                        // Persist to localStorage
                                         spawn(async move {
-                                            if let Ok(json) = serde_json::to_string(&*vlans.read()) {
-                                                let escaped = json.replace('\'', "\\\\'");
-                                                let script = format!("localStorage.setItem('network_vlans', '{}')", escaped); 
-                                                let _ = document::eval(&script).await;
+                                            let client = BackendClient::new();
+                                            let cmd = serde_json::json!({
+                                                "type": "network_delete_vlan",
+                                                "vlan_id": id,
+                                                "parent_interface": "" // Backend needs parent interface
+                                            });
+                                            if let Ok(_) = client.send_ws_command(&cmd).await {
+                                                tracing::info!("[BACKEND] VLAN deleted: {}", id);
+                                                // Reload VLANs after deletion
+                                                if let Ok(loaded_vlans) = client.get_network_interfaces().await {
+                                                    vlans.set(loaded_vlans);
+                                                }
                                             }
                                         });
                                     }
@@ -167,10 +129,31 @@ pub fn VlanManager() -> Element {
                 on_close: move |_| show_create_dialog.set(false),
                 on_create: move |vlan: VlanConfig| {
                     tracing::info!("[FRONTEND] VLAN creation requested: {:?}", vlan);
-                    tracing::info!("[BACKEND REQUEST] Creating VLAN: id={}, name={}, parent={}, ip={:?}", 
-                        vlan.id, vlan.name, vlan.parent_interface, vlan.ip_config);
-                    vlans.write().push(vlan.clone());
-                    tracing::info!("[FRONTEND] VLAN added to UI: {} (ID: {})", vlan.name, vlan.id);
+                    spawn(async move {
+                        let client = BackendClient::new();
+                        let (ip, netmask) = vlan.ip_config.as_ref()
+                            .and_then(|cfg| cfg.split_once('/'))
+                            .map(|(ip, mask)| (Some(ip.to_string()), Some(mask.to_string())))
+                            .unwrap_or((None, None));
+                        
+                        let cmd = serde_json::json!({
+                            "type": "network_create_vlan",
+                            "request": {
+                                "vlan_id": vlan.id,
+                                "name": vlan.name,
+                                "parent_interface": vlan.parent_interface,
+                                "ip_address": ip,
+                                "netmask": netmask
+                            }
+                        });
+                        if let Ok(_) = client.send_ws_command(&cmd).await {
+                            tracing::info!("[BACKEND] VLAN created: {}", vlan.name);
+                            // Reload VLANs after creation
+                            if let Ok(loaded_vlans) = client.get_network_interfaces().await {
+                                vlans.set(loaded_vlans);
+                            }
+                        }
+                    });
                     show_create_dialog.set(false);
                 }
             }
@@ -425,11 +408,3 @@ fn CreateVlanDialog(
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct VlanConfig {
-    id: u16,
-    name: String,
-    parent_interface: String,
-    ip_config: Option<String>,
-    enabled: bool,
-}

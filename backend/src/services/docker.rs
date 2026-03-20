@@ -990,7 +990,25 @@ impl DockerService {
             Command::VirtEnvGetTemplates |
             Command::SystemGetProcessList |
             Command::SystemKillProcess { .. } |
-            Command::NetworkScanDevices => {
+            Command::NetworkScanDevices |
+            Command::NetworkAddRoute { .. } |
+            Command::NetworkDeleteRoute { .. } |
+            Command::NetworkGetRoutes |
+            Command::NetworkCreateFirewallRule { .. } |
+            Command::NetworkDeleteFirewallRule { .. } |
+            Command::NetworkGetFirewallRules |
+            Command::NetworkCreateVlan { .. } |
+            Command::NetworkDeleteVlan { .. } |
+            Command::NetworkGetInterfaces |
+            Command::RemoteDesktopCreateConnection { .. } |
+            Command::RemoteDesktopUpdateConnection { .. } |
+            Command::RemoteDesktopDeleteConnection { .. } |
+            Command::RemoteDesktopGetConnections |
+            Command::RemoteDesktopConnect { .. } |
+            Command::RemoteDesktopDisconnect { .. } |
+            Command::RemoteDesktopCreateGroup { .. } |
+            Command::RemoteDesktopAddToGroup { .. } |
+            Command::RemoteDesktopGetGroups => {
                 // These commands are handled by other services, ignore them here
             }
         }
