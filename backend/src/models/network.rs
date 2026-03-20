@@ -55,52 +55,6 @@ pub struct VlanConfig {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Route {
-    pub destination: String,
-    pub gateway: String,
-    pub interface: String,
-    pub metric: u32,
-    pub route_type: RouteType,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum RouteType {
-    Static,
-    Dynamic,
-    Default,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FirewallRule {
-    pub id: String,
-    pub name: String,
-    pub enabled: bool,
-    pub action: FirewallAction,
-    pub direction: TrafficDirection,
-    pub protocol: Option<String>,
-    pub source_ip: Option<String>,
-    pub source_port: Option<u16>,
-    pub destination_ip: Option<String>,
-    pub destination_port: Option<u16>,
-    pub interface: Option<String>,
-    pub priority: u32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum FirewallAction {
-    Allow,
-    Deny,
-    Log,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum TrafficDirection {
-    Inbound,
-    Outbound,
-    Both,
-}
-
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Protocol {
@@ -200,25 +154,9 @@ pub struct UpdateInterfaceRequest {
     pub mtu: Option<u32>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AddRouteRequest {
-    pub destination: String,
-    pub gateway: String,
-    pub interface: Option<String>,
-    pub metric: Option<u32>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateFirewallRuleRequest {
+pub struct CreateBridgeRequest {
     pub name: String,
-    pub action: FirewallAction,
-    pub direction: TrafficDirection,
-    pub protocol: Option<String>,
-    pub source_ip: Option<String>,
-    pub source_port: Option<u16>,
-    pub destination_ip: Option<String>,
-    pub destination_port: Option<u16>,
-    pub interface: Option<String>,
+    pub interfaces: Vec<String>,
+    pub ip_config: Option<String>,
 }

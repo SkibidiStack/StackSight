@@ -3108,6 +3108,16 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
             state.network.topology_scanning = false;
             Ok(())
         }
+        Ok(Event::RemoteDesktopConnectionsUpdated { connections }) => {
+            let mut state = app_state.write();
+            state.remote_desktop.connections = connections;
+            Ok(())
+        }
+        Ok(Event::RemoteDesktopSessionsUpdated { sessions }) => {
+            let mut state = app_state.write();
+            state.remote_desktop.active_sessions = sessions;
+            Ok(())
+        }
         Err(err) => Err(format!("event parse failed: {err}")),
     }
 }

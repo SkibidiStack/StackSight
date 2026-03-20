@@ -100,6 +100,8 @@ pub enum Event {
     DockerfileSaved { path: String },
     DockerEngineLogs { logs: String },
     NetworkTopology(NetworkTopologyData),
+    RemoteDesktopConnectionsUpdated { connections: Vec<crate::state::app_state::RemoteConnection> },
+    RemoteDesktopSessionsUpdated { sessions: Vec<crate::state::app_state::ActiveSession> },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -180,6 +182,11 @@ pub enum Command {
 
     // Network Commands
     NetworkScanDevices,
+
+    // Remote Desktop Commands
+    RemoteDesktopGetConnections,
+    RemoteDesktopConnect { connection_id: String },
+    RemoteDesktopDisconnect { connection_id: String },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

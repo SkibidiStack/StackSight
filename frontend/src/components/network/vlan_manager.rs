@@ -13,7 +13,7 @@ pub fn VlanManager() -> Element {
     use_effect(move || {
         spawn(async move {
             let client = BackendClient::new();
-            match client.get_network_interfaces().await {
+            match client.get_vlans().await {
                 Ok(loaded_vlans) => {
                     vlans.set(loaded_vlans);
                 }
@@ -92,7 +92,7 @@ pub fn VlanManager() -> Element {
                                             if let Ok(_) = client.send_ws_command(&cmd).await {
                                                 tracing::info!("[BACKEND] VLAN deleted: {}", id);
                                                 // Reload VLANs after deletion
-                                                if let Ok(loaded_vlans) = client.get_network_interfaces().await {
+                                                if let Ok(loaded_vlans) = client.get_vlans().await {
                                                     vlans.set(loaded_vlans);
                                                 }
                                             }
@@ -149,7 +149,7 @@ pub fn VlanManager() -> Element {
                         if let Ok(_) = client.send_ws_command(&cmd).await {
                             tracing::info!("[BACKEND] VLAN created: {}", vlan.name);
                             // Reload VLANs after creation
-                            if let Ok(loaded_vlans) = client.get_network_interfaces().await {
+                            if let Ok(loaded_vlans) = client.get_vlans().await {
                                 vlans.set(loaded_vlans);
                             }
                         }

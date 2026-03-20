@@ -1,11 +1,12 @@
 use dioxus::prelude::*;
+use crate::state::{ConnectionProtocol, ConnectionStatus, RemoteConnection};
 
 #[component]
 pub fn ConnectionList(
+    connections: Vec<RemoteConnection>,
     on_connect: EventHandler<String>,
     on_edit: EventHandler<String>
 ) -> Element {
-    let connections = use_signal(|| Vec::<RemoteConnection>::new());
     let loading = use_signal(|| false);
     let mut filter_protocol = use_signal(|| Option::<ConnectionProtocol>::None);
 
@@ -55,13 +56,11 @@ pub fn ConnectionList(
                         div { class: "empty-icon", "⏳" }
                         div { class: "empty-title", "Loading..." }
                     }
-                } else if connections.read().is_empty() {
+                } else if connections.is_empty() {
                     div { class: "empty-state",
                         div { class: "empty-icon", "💻" }
                         div { class: "empty-title", "No remote connections configured" }
-                        div { class: "empty-description",
-                            "Create a new connection to access remote servers via SSH, RDP, or VNC."
-                        }
+                        div { class: "empty-description", "Create a new connection to access remote servers via SSH, RDP, or VNC." }
                     }
                 } else {
                     table { class: "docker-table",
@@ -76,7 +75,7 @@ pub fn ConnectionList(
                             }
                         }
                         tbody {
-                            for conn in connections.read().iter() {
+                            for conn in connections.iter() {
                                 ConnectionRow {
                                     connection: conn.clone(),
                                     on_connect: move |id| on_connect.call(id),
@@ -165,37 +164,3 @@ fn ConnectionRow(
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum ConnectionProtocol {
-    Ssh,
-    Rdp,
-    Vnc,
-    Spice,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum ConnectionStatus {
-    Disconnected,
-    Connecting,
-    Connected,
-    Failed,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct RemoteConnection {
-    pub id: String,
-    pub name: String,
-    pub protocol: ConnectionProtocol,
-    pub host: String,
-    pub port: u16,
-    pub credentials: Credentials,
-    pub status: ConnectionStatus,
-    pub last_connected: Option<String>,
-    pub favorite: bool,
-    pub tags: Vec<String>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Credentials {
-    pub username: String,
-}

@@ -1,22 +1,16 @@
 pub mod interface_list;
 pub mod vlan_manager;
-pub mod route_table;
-pub mod firewall_rules;
 pub mod network_graph;
 
 use dioxus::prelude::*;
 use interface_list::InterfaceList;
 use vlan_manager::VlanManager;
-use route_table::RouteTable;
-use firewall_rules::FirewallRules;
 use network_graph::NetworkGraph;
 
 #[derive(Clone, Copy, PartialEq)]
 enum NetworkTab {
     Interfaces,
     Vlans,
-    Routes,
-    Firewall,
     Topology,
 }
 
@@ -46,16 +40,6 @@ pub fn NetworkManagerView() -> Element {
                         onclick: move |_| active_tab.set(NetworkTab::Vlans),
                         "VLANs"
                     }
-                    button {
-                        class: if *active_tab.read() == NetworkTab::Routes { "btn primary" } else { "btn" },
-                        onclick: move |_| active_tab.set(NetworkTab::Routes),
-                        "Routes"
-                    }
-                    button {
-                        class: if *active_tab.read() == NetworkTab::Firewall { "btn primary" } else { "btn" },
-                        onclick: move |_| active_tab.set(NetworkTab::Firewall),
-                        "Firewall"
-                    }
                 }
             }
 
@@ -64,8 +48,6 @@ pub fn NetworkManagerView() -> Element {
                     NetworkTab::Topology => rsx! { NetworkGraph {} },
                     NetworkTab::Interfaces => rsx! { InterfaceList {} },
                     NetworkTab::Vlans => rsx! { VlanManager {} },
-                    NetworkTab::Routes => rsx! { RouteTable {} },
-                    NetworkTab::Firewall => rsx! { FirewallRules {} },
                 }
             }
         }

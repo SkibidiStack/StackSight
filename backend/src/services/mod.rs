@@ -35,7 +35,7 @@ impl ServiceHandle {
             ServiceHandle::FileSystem(s) => s.start().await,
             ServiceHandle::Communication(s) => s.start().await,
             ServiceHandle::Network(s) => s.start().await,
-            ServiceHandle::RemoteDesktop(_) => Ok(()),
+            ServiceHandle::RemoteDesktop(s) => s.start().await,
         }
     }
 
@@ -47,7 +47,7 @@ impl ServiceHandle {
             ServiceHandle::FileSystem(s) => s.run().await,
             ServiceHandle::Communication(s) => s.run().await,
             ServiceHandle::Network(s) => s.run().await,
-            ServiceHandle::RemoteDesktop(_) => Ok(()),
+            ServiceHandle::RemoteDesktop(s) => s.run().await,
         }
     }
 }

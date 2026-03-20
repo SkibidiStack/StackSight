@@ -46,15 +46,12 @@ pub enum Command {
 
     // Network Commands
     NetworkScanDevices,
-    NetworkAddRoute { request: crate::models::network::AddRouteRequest },
-    NetworkDeleteRoute { destination: String },
-    NetworkGetRoutes,
-    NetworkCreateFirewallRule { request: crate::models::network::CreateFirewallRuleRequest },
-    NetworkDeleteFirewallRule { rule_id: String },
-    NetworkGetFirewallRules,
     NetworkCreateVlan { request: crate::models::network::CreateVlanRequest },
     NetworkDeleteVlan { parent_interface: String, vlan_id: u16 },
+    NetworkGetVlans,
     NetworkGetInterfaces,
+    NetworkCreateBridge { request: crate::models::network::CreateBridgeRequest },
+    NetworkDeleteBridge { name: String },
     
     // Remote Desktop Commands
     RemoteDesktopCreateConnection { request: crate::models::remote_desktop::CreateConnectionRequest },

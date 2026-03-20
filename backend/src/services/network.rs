@@ -15,9 +15,8 @@ use tracing::{debug, info};
 pub struct NetworkService {
     bus: EventBus,
     interfaces: Arc<RwLock<HashMap<String, NetworkInterface>>>,
-    routes: Arc<RwLock<Vec<Route>>>,
-    firewall_rules: Arc<RwLock<HashMap<String, FirewallRule>>>,
     vlans: Arc<RwLock<Vec<VlanConfig>>>,
+    bridges: Arc<RwLock<Vec<BridgeConfig>>>,
     command_rx: mpsc::Receiver<Command>,
 }
 
@@ -27,9 +26,8 @@ impl NetworkService {
         Ok(Self {
             bus,
             interfaces: Arc::new(RwLock::new(HashMap::new())),
-            routes: Arc::new(RwLock::new(Vec::new())),
-            firewall_rules: Arc::new(RwLock::new(HashMap::new())),
             vlans: Arc::new(RwLock::new(Vec::new())),
+            bridges: Arc::new(RwLock::new(Vec::new())),
             command_rx,
         })
     }
@@ -39,13 +37,10 @@ impl NetworkService {
         info!("Initializing network service");
         
         // Load saved user configurations
-        self.load_routes().await?;
-        self.load_firewall_rules().await?;
         self.load_vlans().await?;
+        self.load_bridges().await?;
         
         self.refresh_interfaces().await?;
-        self.refresh_routes().await?;
-        self.refresh_firewall_rules().await?;
         
         Ok(())
     }
@@ -60,77 +55,12 @@ impl NetworkService {
     }
 
     /// Load saved routes from file
-    async fn load_routes(&self) -> Result<()> {
-        let config_dir = Self::get_config_dir()?;
-        let file_path = config_dir.join("routes.json");
-        
-        if !file_path.exists() {
-            info!("No saved routes file found");
-            return Ok(());
-        }
-        
-        let json = fs::read_to_string(&file_path).await?;
-        let saved_routes: Vec<Route> = serde_json::from_str(&json)?;
-        
-        let mut routes = self.routes.write().await;
-        for route in saved_routes {
-            routes.push(route);
-        }
-        
-        info!("Loaded {} saved routes", routes.len());
-        Ok(())
-    }
 
     /// Save routes to file
-    async fn save_routes(&self) -> Result<()> {
-        let config_dir = Self::get_config_dir()?;
-        fs::create_dir_all(&config_dir).await?;
-        
-        let file_path = config_dir.join("routes.json");
-        let routes = self.routes.read().await;
-        let json = serde_json::to_string_pretty(&*routes)?;
-        
-        fs::write(&file_path, json).await?;
-        info!("Saved {} routes to file", routes.len());
-        Ok(())
-    }
 
     /// Load saved firewall rules from file
-    async fn load_firewall_rules(&self) -> Result<()> {
-        let config_dir = Self::get_config_dir()?;
-        let file_path = config_dir.join("firewall_rules.json");
-        
-        if !file_path.exists() {
-            info!("No saved firewall rules file found");
-            return Ok(());
-        }
-        
-        let json = fs::read_to_string(&file_path).await?;
-        let saved_rules: Vec<FirewallRule> = serde_json::from_str(&json)?;
-        
-        let mut rules = self.firewall_rules.write().await;
-        for rule in saved_rules {
-            rules.insert(rule.id.clone(), rule);
-        }
-        
-        info!("Loaded {} saved firewall rules", rules.len());
-        Ok(())
-    }
 
     /// Save firewall rules to file
-    async fn save_firewall_rules(&self) -> Result<()> {
-        let config_dir = Self::get_config_dir()?;
-        fs::create_dir_all(&config_dir).await?;
-        
-        let file_path = config_dir.join("firewall_rules.json");
-        let rules = self.firewall_rules.read().await;
-        let rules_vec: Vec<&FirewallRule> = rules.values().collect();
-        let json = serde_json::to_string_pretty(&rules_vec)?;
-        
-        fs::write(&file_path, json).await?;
-        info!("Saved {} firewall rules to file", rules.len());
-        Ok(())
-    }
 
     /// Load saved VLANs from file
     async fn load_vlans(&self) -> Result<()> {
@@ -158,27 +88,78 @@ impl NetworkService {
         fs::create_dir_all(&config_dir).await?;
         
         let file_path = config_dir.join("vlans.json");
-        let interfaces = self.interfaces.read().await;
+        let vlans = self.vlans.read().await;
         
-        // Extract VLANs from interfaces
-        let mut vlans_by_interface: HashMap<String, Vec<VlanConfig>> = HashMap::new();
-        for (name, iface) in interfaces.iter() {
-            if !iface.vlans.is_empty() {
-                vlans_by_interface.insert(name.clone(), iface.vlans.clone());
-            }
-        }
-        
-        let json = serde_json::to_string_pretty(&vlans_by_interface)?;
+        let json = serde_json::to_string_pretty(&*vlans)?;
         fs::write(&file_path, json).await?;
         
-        info!("Saved VLANs for {} interfaces", vlans_by_interface.len());
+        info!("Saved {} VLANs to file", vlans.len());
+        Ok(())
+    }
+
+    /// Load saved bridges from file
+    async fn load_bridges(&self) -> Result<()> {
+        let config_dir = Self::get_config_dir()?;
+        let file_path = config_dir.join("bridges.json");
+        
+        if !file_path.exists() {
+            info!("No saved bridges file found");
+            return Ok(());
+        }
+        
+        let json = fs::read_to_string(&file_path).await?;
+        let saved_bridges: Vec<BridgeConfig> = serde_json::from_str(&json)?;
+        
+        let mut bridges = self.bridges.write().await;
+        *bridges = saved_bridges;
+        
+        info!("Loaded {} saved bridges", bridges.len());
+        Ok(())
+    }
+
+    /// Save bridges to file
+    async fn save_bridges(&self) -> Result<()> {
+        let config_dir = Self::get_config_dir()?;
+        fs::create_dir_all(&config_dir).await?;
+        
+        let file_path = config_dir.join("bridges.json");
+        let bridges = self.bridges.read().await;
+        
+        let json = serde_json::to_string_pretty(&*bridges)?;
+        fs::write(&file_path, json).await?;
+        
+        info!("Saved {} bridges to file", bridges.len());
         Ok(())
     }
 
     /// Get all network interfaces
     pub async fn get_interfaces(&self) -> Result<Vec<NetworkInterface>> {
         let interfaces = self.interfaces.read().await;
-        Ok(interfaces.values().cloned().collect())
+        let mut result: Vec<NetworkInterface> = interfaces.values().cloned().collect();
+        
+        let bridges = self.bridges.read().await;
+        for bridge in bridges.iter() {
+            // Only add if it wasn't already discovered by OS interface scan
+            if !interfaces.contains_key(&bridge.name) {
+                let mut ip_addresses = Vec::new();
+                if let Some(ip) = bridge.ip_config.clone() {
+                    ip_addresses.push(ip);
+                }
+                result.push(NetworkInterface {
+                    name: bridge.name.clone(),
+                    display_name: format!("Bridge {}", bridge.name),
+                    mac_address: None,
+                    ip_addresses,
+                    status: InterfaceStatus::Up,
+                    mtu: 1500,
+                    speed: None,
+                    interface_type: InterfaceType::Bridge,
+                    vlans: vec![],
+                });
+            }
+        }
+        
+        Ok(result)
     }
 
     /// Get all VLANs across all interfaces as a flat list
@@ -400,6 +381,64 @@ impl NetworkService {
         Ok(())
     }
 
+    pub async fn create_bridge(&self, request: CreateBridgeRequest) -> Result<BridgeConfig> {
+        info!("Creating bridge {}", request.name);
+
+        let ip_cfg = request.ip_config.and_then(|ip_str| {
+            let parts: Vec<&str> = ip_str.split('/').collect();
+            if parts.len() == 2 {
+                if let Ok(addr) = parts[0].parse::<IpAddr>() {
+                    let version = if addr.is_ipv4() { IpVersion::V4 } else { IpVersion::V6 };
+                    Some(IpConfiguration {
+                        address: addr,
+                        netmask: format!("/{}", parts[1]),
+                        gateway: None,
+                        version,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        });
+
+        let bridge_config = BridgeConfig {
+            name: request.name.clone(),
+            interfaces: request.interfaces.clone(),
+            stp_enabled: false,
+            ip_config: ip_cfg,
+        };
+
+        let mut bridges = self.bridges.write().await;
+        bridges.push(bridge_config.clone());
+        drop(bridges);
+
+        self.save_bridges().await?;
+        info!("Bridge {} added to collection and saved", request.name);
+
+        Ok(bridge_config)
+    }
+
+    pub async fn delete_bridge(&self, name: &str) -> Result<()> {
+        info!("Deleting bridge {}", name);
+
+        let mut bridges = self.bridges.write().await;
+        let original_len = bridges.len();
+        bridges.retain(|b| b.name != name);
+
+        if bridges.len() == original_len {
+            return Err(anyhow!("Bridge {} not found", name));
+        }
+        drop(bridges);
+
+        if let Err(e) = self.save_bridges().await {
+            info!("Failed to save bridges: {}", e);
+        }
+
+        Ok(())
+    }
+
     /// Update interface configuration
     pub async fn update_interface(&self, request: UpdateInterfaceRequest) -> Result<()> {
         info!("Updating interface {}", request.interface);
@@ -428,212 +467,13 @@ impl NetworkService {
         Ok(())
     }
 
-    /// Get all routes
-    pub async fn get_routes(&self) -> Result<Vec<Route>> {
-        let routes = self.routes.read().await;
-        Ok(routes.clone())
-    }
-
-    /// Refresh routing table
-    pub async fn refresh_routes(&self) -> Result<()> {
-        debug!("Refreshing routing table");
-        
-        #[cfg(target_os = "linux")]
-        {
-            let output = SysCommand::new("ip")
-                .args(&["--json", "route", "show"])
-                .output()
-                .context("Failed to get routes")?;
-
-            if output.status.success() {
-                let _json_str = String::from_utf8(output.stdout)?;
-                // Parse route JSON
-                let mut routes = self.routes.write().await;
-                routes.clear();
-                // (Full parsing implementation here)
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Add a new route
-    pub async fn add_route(&self, request: AddRouteRequest) -> Result<()> {
-        info!("Adding route to {}", request.destination);
-
-        #[cfg(target_os = "linux")]
-        {
-            let mut args = vec!["route", "add", &request.destination, "via", &request.gateway];
-            
-            let metric_str;
-            if let Some(iface) = &request.interface {
-                args.extend_from_slice(&["dev", iface]);
-            }
-            
-            if let Some(metric) = request.metric {
-                metric_str = metric.to_string();
-                args.extend_from_slice(&["metric", &metric_str]);
-            }
-
-            let output = SysCommand::new("ip")
-                .args(&args)
-                .output()
-                .context("Failed to add route")?;
-
-            if !output.status.success() {
-                return Err(anyhow!("Failed to add route: {}", String::from_utf8_lossy(&output.stderr)));
-            }
-        }
-
-        self.refresh_routes().await?;
-        
-        // Save routes after adding
-        if let Err(e) = self.save_routes().await {
-            info!("Failed to save routes: {}", e);
-        }
-        
-        Ok(())
-    }
-
     /// Delete a route
-    pub async fn delete_route(&self, destination: &str) -> Result<()> {
-        info!("Deleting route to {}", destination);
-
-        #[cfg(target_os = "linux")]
-        {
-            let output = SysCommand::new("ip")
-                .args(&["route", "del", destination])
-                .output()
-                .context("Failed to delete route")?;
-
-            if !output.status.success() {
-                return Err(anyhow!("Failed to delete route: {}", String::from_utf8_lossy(&output.stderr)));
-            }
-        }
-
-        self.refresh_routes().await?;
-        
-        // Save routes after deleting
-        if let Err(e) = self.save_routes().await {
-            info!("Failed to save routes: {}", e);
-        }
-        
-        Ok(())
-    }
 
     /// Get all firewall rules
-    pub async fn get_firewall_rules(&self) -> Result<Vec<FirewallRule>> {
-        let rules = self.firewall_rules.read().await;
-        Ok(rules.values().cloned().collect())
-    }
 
     /// Refresh firewall rules
-    pub async fn refresh_firewall_rules(&self) -> Result<()> {
-        debug!("Refreshing firewall rules");
-        
-        #[cfg(target_os = "linux")]
-        {
-            // Use iptables or nftables to get rules
-            let output = SysCommand::new("iptables")
-                .args(&["-L", "-n", "-v"])
-                .output();
-                
-            if let Ok(result) = output {
-                if result.status.success() {
-                    // Parse iptables output
-                    // (Full parsing implementation here)
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Create a firewall rule
-    pub async fn create_firewall_rule(&self, request: CreateFirewallRuleRequest) -> Result<FirewallRule> {
-        info!("Creating firewall rule: {}", request.name);
-
-        let rule_id = uuid::Uuid::new_v4().to_string();
-        
-        #[cfg(target_os = "linux")]
-        {
-            let chain = match request.direction {
-                TrafficDirection::Inbound => "INPUT",
-                TrafficDirection::Outbound => "OUTPUT",
-                TrafficDirection::Both => "FORWARD",
-            };
-
-            let action_str = match request.action {
-                FirewallAction::Allow => "ACCEPT",
-                FirewallAction::Deny => "DROP",
-                FirewallAction::Log => "LOG",
-            };
-
-            let mut args = vec!["-A", chain];
-            
-            if let Some(proto) = &request.protocol {
-                args.extend_from_slice(&["-p", proto]);
-            }
-
-            if let Some(src_ip) = &request.source_ip {
-                args.extend_from_slice(&["-s", src_ip]);
-            }
-
-            if let Some(dst_ip) = &request.destination_ip {
-                args.extend_from_slice(&["-d", dst_ip]);
-            }
-
-            args.extend_from_slice(&["-j", action_str]);
-
-            SysCommand::new("iptables")
-                .args(&args)
-                .output()
-                .context("Failed to create firewall rule")?;
-        }
-
-        let rule = FirewallRule {
-            id: rule_id,
-            name: request.name,
-            enabled: true,
-            action: request.action,
-            direction: request.direction,
-            protocol: request.protocol,
-            source_ip: request.source_ip,
-            source_port: request.source_port,
-            destination_ip: request.destination_ip,
-            destination_port: request.destination_port,
-            interface: request.interface,
-            priority: 100,
-        };
-
-        let mut rules = self.firewall_rules.write().await;
-        rules.insert(rule.id.clone(), rule.clone());
-        
-        // Save firewall rules after creating
-        drop(rules); // Release lock before save
-        if let Err(e) = self.save_firewall_rules().await {
-            info!("Failed to save firewall rules: {}", e);
-        }
-
-        Ok(rule)
-    }
 
     /// Delete a firewall rule
-    pub async fn delete_firewall_rule(&self, rule_id: &str) -> Result<()> {
-        info!("Deleting firewall rule: {}", rule_id);
-
-        let mut rules = self.firewall_rules.write().await;
-        rules.remove(rule_id)
-            .ok_or_else(|| anyhow!("Firewall rule not found"))?;
-        
-        // Save firewall rules after deleting
-        drop(rules); // Release lock before save
-        if let Err(e) = self.save_firewall_rules().await {
-            info!("Failed to save firewall rules: {}", e);
-        }
-
-        Ok(())
-    }
 
     /// Get network statistics for an interface
     pub async fn get_interface_stats(&self, interface: &str) -> Result<NetworkStats> {
@@ -934,95 +774,29 @@ impl NetworkService {
 
         bus.publish(Event::NetworkTopology(NetworkTopologyData {
             devices,
-            gateway,
-            local_ip,
+            gateway: gateway.clone(),
+            local_ip: local_ip.clone(),
             scan_time,
         }));
     }
-}
 
-#[async_trait::async_trait]
-impl crate::services::Service for NetworkService {
-    async fn start(&mut self) -> Result<()> {
-        info!("network service start");
+    pub async fn start(&mut self) -> Result<()> {
+        info!("Starting network service");
         Ok(())
     }
 
-    async fn run(mut self) -> Result<()> {
-        info!("network service running");
+    pub async fn run(mut self) -> Result<()> {
+        info!("Running network service loop");
         loop {
             tokio::select! {
                 cmd = self.command_rx.recv() => {
                     match cmd {
                         Some(Command::NetworkScanDevices) => {
+                            info!("[NETWORK] Received NetworkScanDevices command");
                             let bus = self.bus.clone();
                             tokio::spawn(async move {
-                                NetworkService::scan_devices(&bus).await;
+                                Self::scan_devices(&bus).await;
                             });
-                        }
-                        Some(Command::NetworkAddRoute { request }) => {
-                            info!("[NETWORK] Received NetworkAddRoute command: dest={} gw={}", request.destination, request.gateway);
-                            let result = self.add_route(request).await;
-                            match result {
-                                Ok(()) => {
-                                    if let Ok(routes) = self.get_routes().await {
-                                        self.bus.publish(Event::NetworkRoutesUpdated { routes });
-                                    }
-                                }
-                                Err(e) => {
-                                    self.bus.publish(Event::Error { message: format!("Failed to add route: {}", e) });
-                                }
-                            }
-                        }
-                        Some(Command::NetworkDeleteRoute { destination }) => {
-                            let result = self.delete_route(&destination).await;
-                            match result {
-                                Ok(()) => {
-                                    if let Ok(routes) = self.get_routes().await {
-                                        self.bus.publish(Event::NetworkRoutesUpdated { routes });
-                                    }
-                                }
-                                Err(e) => {
-                                    self.bus.publish(Event::Error { message: format!("Failed to delete route: {}", e) });
-                                }
-                            }
-                        }
-                        Some(Command::NetworkGetRoutes) => {
-                            if let Ok(routes) = self.get_routes().await {
-                                self.bus.publish(Event::NetworkRoutesUpdated { routes });
-                            }
-                        }
-                        Some(Command::NetworkCreateFirewallRule { request }) => {
-                            info!("[NETWORK] Received NetworkCreateFirewallRule command: name={}", request.name);
-                            let result = self.create_firewall_rule(request).await;
-                            match result {
-                                Ok(rule) => {
-                                    if let Ok(rules) = self.get_firewall_rules().await {
-                                        self.bus.publish(Event::NetworkFirewallRulesUpdated { rules });
-                                    }
-                                }
-                                Err(e) => {
-                                    self.bus.publish(Event::Error { message: format!("Failed to create firewall rule: {}", e) });
-                                }
-                            }
-                        }
-                        Some(Command::NetworkDeleteFirewallRule { rule_id }) => {
-                            let result = self.delete_firewall_rule(&rule_id).await;
-                            match result {
-                                Ok(()) => {
-                                    if let Ok(rules) = self.get_firewall_rules().await {
-                                        self.bus.publish(Event::NetworkFirewallRulesUpdated { rules });
-                                    }
-                                }
-                                Err(e) => {
-                                    self.bus.publish(Event::Error { message: format!("Failed to delete firewall rule: {}", e) });
-                                }
-                            }
-                        }
-                        Some(Command::NetworkGetFirewallRules) => {
-                            if let Ok(rules) = self.get_firewall_rules().await {
-                                self.bus.publish(Event::NetworkFirewallRulesUpdated { rules });
-                            }
                         }
                         Some(Command::NetworkCreateVlan { request }) => {
                             info!("[NETWORK] Received NetworkCreateVlan command: id={} name={}", request.vlan_id, request.name);
@@ -1030,19 +804,7 @@ impl crate::services::Service for NetworkService {
                             match result {
                                 Ok(_vlan) => {
                                     if let Ok(vlans) = self.get_all_vlans().await {
-                                        self.bus.publish(Event::NetworkInterfacesUpdated { interfaces: vlans.into_iter().map(|v| {
-                                            NetworkInterface {
-                                                name: format!("{}.{}", v.parent_interface, v.id),
-                                                display_name: v.name.clone(),
-                                                mac_address: None,
-                                                ip_addresses: vec![],
-                                                status: InterfaceStatus::Up,
-                                                mtu: 1500,
-                                                speed: None,
-                                                interface_type: InterfaceType::Vlan,
-                                                vlans: vec![v],
-                                            }
-                                        }).collect() });
+                                        self.bus.publish(Event::NetworkVlansUpdated { vlans });
                                     }
                                 }
                                 Err(e) => {
@@ -1055,19 +817,7 @@ impl crate::services::Service for NetworkService {
                             match result {
                                 Ok(()) => {
                                     if let Ok(vlans) = self.get_all_vlans().await {
-                                        self.bus.publish(Event::NetworkInterfacesUpdated { interfaces: vlans.into_iter().map(|v| {
-                                            NetworkInterface {
-                                                name: format!("{}.{}", v.parent_interface, v.id),
-                                                display_name: v.name.clone(),
-                                                mac_address: None,
-                                                ip_addresses: vec![],
-                                                status: InterfaceStatus::Up,
-                                                mtu: 1500,
-                                                speed: None,
-                                                interface_type: InterfaceType::Vlan,
-                                                vlans: vec![v],
-                                            }
-                                        }).collect() });
+                                        self.bus.publish(Event::NetworkVlansUpdated { vlans });
                                     }
                                 }
                                 Err(e) => {
@@ -1075,21 +825,42 @@ impl crate::services::Service for NetworkService {
                                 }
                             }
                         }
-                        Some(Command::NetworkGetInterfaces) => {
+                        Some(Command::NetworkGetVlans) => {
                             if let Ok(vlans) = self.get_all_vlans().await {
-                                self.bus.publish(Event::NetworkInterfacesUpdated { interfaces: vlans.into_iter().map(|v| {
-                                    NetworkInterface {
-                                        name: format!("{}.{}", v.parent_interface, v.id),
-                                        display_name: v.name.clone(),
-                                        mac_address: None,
-                                        ip_addresses: vec![],
-                                        status: InterfaceStatus::Up,
-                                        mtu: 1500,
-                                        speed: None,
-                                        interface_type: InterfaceType::Vlan,
-                                        vlans: vec![v],
+                                self.bus.publish(Event::NetworkVlansUpdated { vlans });
+                            }
+                        }
+                        Some(Command::NetworkGetInterfaces) => {
+                            if let Ok(interfaces) = self.get_interfaces().await {
+                                self.bus.publish(Event::NetworkInterfacesUpdated { interfaces });
+                            }
+                        }
+                        Some(Command::NetworkCreateBridge { request }) => {
+                            info!("[NETWORK] Received NetworkCreateBridge command: name={}", request.name);
+                            let result = self.create_bridge(request).await;
+                            match result {
+                                Ok(_bridge) => {
+                                    // Trigger get interfaces again
+                                    if let Ok(interfaces) = self.get_interfaces().await {
+                                        self.bus.publish(Event::NetworkInterfacesUpdated { interfaces });
                                     }
-                                }).collect() });
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to create bridge: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::NetworkDeleteBridge { name }) => {
+                            let result = self.delete_bridge(&name).await;
+                            match result {
+                                Ok(()) => {
+                                    if let Ok(interfaces) = self.get_interfaces().await {
+                                        self.bus.publish(Event::NetworkInterfacesUpdated { interfaces });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to delete bridge: {}", e) });
+                                }
                             }
                         }
                         Some(_) => {} // other commands handled by other services

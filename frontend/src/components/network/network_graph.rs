@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use crate::state::AppState;
-use crate::state::messages::{NetworkDevice, NetworkDeviceType, NetworkTopologyData};
+use crate::state::messages::{NetworkDevice, NetworkDeviceType, NetworkTopologyData, Command};
+use crate::app::BackendBridge;
 
 // ── Layout helpers ─────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ fn device_color(dt: &NetworkDeviceType) -> &'static str {
 #[component]
 pub fn NetworkGraph() -> Element {
     let mut app_state = use_context::<Signal<AppState>>();
+    let bridge = use_context::<BackendBridge>();
     let topology: Option<NetworkTopologyData> = app_state.read().network.topology.clone();
     let scanning = app_state.read().network.topology_scanning;
     let mut selected = use_signal(|| Option::<String>::None); // selected IP
@@ -58,16 +60,8 @@ pub fn NetworkGraph() -> Element {
     let on_scan = move |_| {
         let mut state = app_state.write();
         state.network.topology_scanning = true;
-        // The command will be sent via the global dispatcher in app.rs the same way other
-        // commands are dispatched; we emit it through the shared command channel via a custom event
-        // by writing to a well-known signal that app.rs polls, OR we can call the ws directly.
-        // Here we piggyback on the same WebSocket send used elsewhere.
-        spawn(async move {
-            let client = crate::services::backend_client::BackendClient::new();
-            let _ = client
-                .send_ws_command(&serde_json::json!({"type": "network_scan_devices"}))
-                .await;
-        });
+        tracing::info!("Initiating network scan via bridge...");
+        bridge.send(Command::NetworkScanDevices);
     };
 
     rsx! {

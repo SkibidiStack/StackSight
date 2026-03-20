@@ -516,15 +516,36 @@ pub struct RemoteDesktopState {
     pub last_error: Option<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq)]
+pub enum ConnectionProtocol {
+    Ssh,
+    Rdp,
+    Vnc,
+    Spice,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub enum ConnectionStatus {
+    Disconnected,
+    Connecting,
+    Connected,
+    Failed,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub struct Credentials {
+    pub username: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct RemoteConnection {
     pub id: String,
     pub name: String,
-    pub protocol: String,
+    pub protocol: ConnectionProtocol,
     pub host: String,
     pub port: u16,
-    pub username: String,
-    pub status: String,
+    pub credentials: Credentials,
+    pub status: ConnectionStatus,
     pub last_connected: Option<String>,
     pub favorite: bool,
     pub tags: Vec<String>,

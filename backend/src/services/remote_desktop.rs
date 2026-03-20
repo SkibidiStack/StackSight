@@ -304,6 +304,7 @@ impl RemoteDesktopService {
 
         let mut connections = self.connections.write().await;
         connections.insert(connection_id, connection.clone());
+        drop(connections); // Drop write lock to avoid deadlock in save_connections
         
         self.save_connections().await?;
 
@@ -361,6 +362,7 @@ impl RemoteDesktopService {
         let mut connections = self.connections.write().await;
         connections.remove(id)
             .ok_or_else(|| anyhow!("Connection not found"))?;
+        drop(connections); // Drop write lock to avoid deadlock in save_connections
         
         self.save_connections().await?;
 
@@ -438,6 +440,10 @@ impl RemoteDesktopService {
     async fn launch_ssh_client(&self, connection: &RemoteConnection, credentials: &Credentials) -> Result<Child> {
         let mut args = Vec::new();
 
+        // Auto-accept host key to prevent getting stuck on unknown hosts
+        args.push("-o".to_string());
+        args.push("StrictHostKeyChecking=no".to_string());
+
         // Add user and host
         args.push(format!("{}@{}", credentials.username, connection.host));
 
@@ -445,16 +451,36 @@ impl RemoteDesktopService {
         args.push("-p".to_string());
         args.push(connection.port.to_string());
 
+        let mut command_name = "ssh".to_string();
+        let mut final_args = args.clone();
+        let mut sshpass_env = None;
+
         // Add authentication
         match &credentials.auth_method {
             AuthMethod::PrivateKey { key_path, passphrase: _ } => {
-                args.push("-i".to_string());
-                args.push(key_path.clone());
+                final_args.push("-i".to_string());
+                final_args.push(key_path.clone());
             }
-            AuthMethod::Password { password: _ } => {
-                // Note: SSH doesn't support password on command line for security reasons
-                // In production, use SSH agent or expect script
-                warn!("SSH password authentication requires interactive input");
+            AuthMethod::Password { password } => {
+                // Check if sshpass is installed
+                let has_sshpass = std::process::Command::new("which")
+                    .arg("sshpass")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false);
+                    
+                if has_sshpass {
+                    // Use sshpass to provide password non-interactively
+                    command_name = "sshpass".to_string();
+                    let mut wrapper = vec!["-e".to_string(), "ssh".to_string()];
+                    wrapper.extend(final_args);
+                    final_args = wrapper;
+                    sshpass_env = Some(("SSHPASS", password.clone()));
+                } else {
+                    tracing::warn!("sshpass is not installed. Will open terminal for manual password entry.");
+                }
             }
             _ => {}
         }
@@ -462,53 +488,58 @@ impl RemoteDesktopService {
         // Add SSH-specific settings
         if let Some(ssh_settings) = &connection.settings.ssh_settings {
             if ssh_settings.compression {
-                args.push("-C".to_string());
+                final_args.push("-C".to_string());
             }
             if ssh_settings.forward_x11 {
-                args.push("-X".to_string());
+                final_args.push("-X".to_string());
             }
 
             // Add port forwards
             for forward in &ssh_settings.port_forwards {
                 match forward.forward_type {
                     ForwardType::Local => {
-                        args.push("-L".to_string());
-                        args.push(format!("{}:{}:{}", 
+                        final_args.push("-L".to_string());
+                        final_args.push(format!("{}:{}:{}", 
                             forward.local_port, 
                             forward.remote_host, 
                             forward.remote_port
                         ));
                     }
                     ForwardType::Remote => {
-                        args.push("-R".to_string());
-                        args.push(format!("{}:{}:{}", 
+                        final_args.push("-R".to_string());
+                        final_args.push(format!("{}:{}:{}", 
                             forward.remote_port, 
                             forward.remote_host, 
                             forward.local_port
                         ));
                     }
                     ForwardType::Dynamic => {
-                        args.push("-D".to_string());
-                        args.push(forward.local_port.to_string());
+                        final_args.push("-D".to_string());
+                        final_args.push(forward.local_port.to_string());
                     }
                 }
             }
 
             // Execute command if specified
             if let Some(cmd) = &ssh_settings.command {
-                args.push(cmd.clone());
+                final_args.push(cmd.clone());
             }
         }
 
-        debug!("Launching SSH: ssh {}", args.join(" "));
+        debug!("Launching SSH: {} {}", command_name, final_args.join(" "));
 
-        let child = std::process::Command::new("ssh")
-            .args(&args)
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .context("Failed to launch SSH client")?;
+        let mut cmd = std::process::Command::new(&command_name);
+        cmd.args(&final_args);
+
+        cmd.stdin(Stdio::null())
+           .stdout(Stdio::null())
+           .stderr(Stdio::null());
+
+        if let Some((k, v)) = sshpass_env {
+            cmd.env(k, v);
+        }
+
+        let child = cmd.spawn().context(format!("Failed to launch {} client", command_name))?;
 
         Ok(child)
     }
@@ -777,9 +808,12 @@ impl crate::services::Service for RemoteDesktopService {
                         }
                         Some(Command::RemoteDesktopConnect { connection_id }) => {
                             match self.connect(ConnectRequest { connection_id, override_credentials: None }).await {
-                                Ok(session) => {
+                                Ok(_session) => {
                                     if let Ok(sessions) = self.get_active_sessions().await {
                                         self.bus.publish(Event::RemoteDesktopSessionsUpdated { sessions });
+                                    }
+                                    if let Ok(connections) = self.get_connections().await {
+                                        self.bus.publish(Event::RemoteDesktopConnectionsUpdated { connections });
                                     }
                                 }
                                 Err(e) => {
@@ -792,6 +826,9 @@ impl crate::services::Service for RemoteDesktopService {
                                 Ok(_) => {
                                     if let Ok(sessions) = self.get_active_sessions().await {
                                         self.bus.publish(Event::RemoteDesktopSessionsUpdated { sessions });
+                                    }
+                                    if let Ok(connections) = self.get_connections().await {
+                                        self.bus.publish(Event::RemoteDesktopConnectionsUpdated { connections });
                                     }
                                 }
                                 Err(e) => {

@@ -65,6 +65,22 @@ pub enum PackageOperationType {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CreateVlanRequest {
+    pub vlan_id: u16,
+    pub name: String,
+    pub parent_interface: String,
+    pub ip_address: Option<String>,
+    pub netmask: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CreateBridgeRequest {
+    pub name: String,
+    pub interfaces: Vec<String>,
+    pub ip_config: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Command {
     VirtEnvCreate { request: CreateEnvironmentRequest },
@@ -74,17 +90,19 @@ pub enum Command {
     VirtEnvInstallPackages { operation: PackageOperation },
     VirtEnvList,
     VirtEnvGetTemplates,
-    NetworkGetRoutes,
-    NetworkAddRoute { destination: String, gateway: String, interface: Option<String>, metric: Option<u32> },
-    NetworkDeleteRoute { destination: String },
-    NetworkGetFirewallRules,
-    NetworkCreateFirewallRule { name: String, action: String, direction: String, protocol: Option<String>, source_ip: Option<String>, source_port: Option<u16>, destination_ip: Option<String>, destination_port: Option<u16> },
-    NetworkDeleteFirewallRule { rule_id: String },
-    NetworkGetInterfaces,
-    NetworkCreateVlan { vlan_id: u16, name: String, parent_interface: String, ip_address: Option<String>, netmask: Option<String> },
+    SystemGetProcessList,
+    SystemKillProcess { pid: String },
+    NetworkScanDevices,
+    NetworkCreateVlan { request: CreateVlanRequest },
     NetworkDeleteVlan { parent_interface: String, vlan_id: u16 },
+    NetworkGetVlans,
+    NetworkGetInterfaces,
+    NetworkCreateBridge { request: CreateBridgeRequest },
+    NetworkDeleteBridge { name: String },
     RemoteDesktopGetConnections,
     RemoteDesktopGetGroups,
+    RemoteDesktopConnect { connection_id: String },
+    RemoteDesktopDisconnect { connection_id: String },
 }
 
 pub struct BackendClient {
@@ -92,6 +110,30 @@ pub struct BackendClient {
 }
 
 impl BackendClient {
+    pub async fn create_bridge(&self, bridge: &crate::components::network::interface_list::BridgeConfig) -> Result<()> {
+        let cmd = Command::NetworkCreateBridge {
+            request: CreateBridgeRequest {
+                name: bridge.name.clone(),
+                interfaces: bridge.interfaces.clone(),
+                ip_config: bridge.ip_config.clone(),
+            }
+        };
+        let _ = self.send_and_wait_for_event(
+            cmd,
+            |event_type, _| event_type == "NetworkInterfacesUpdated" || event_type == "network_interfaces_updated",
+            5
+        ).await;
+        Ok(())
+    }
+
+    pub async fn get_network_interfaces(&self) -> Result<Vec<crate::components::network::interface_list::NetworkInterface>> {
+        let raw = self.get_all_interfaces_raw().await?;
+        let parsed = raw.into_iter()
+            .filter_map(|val| serde_json::from_value(val).ok())
+            .collect();
+        Ok(parsed)
+    }
+
     pub fn new() -> Self {
         Self {
             websocket_url: "ws://127.0.0.1:8765".to_string(),
@@ -331,63 +373,51 @@ impl BackendClient {
     }
     
     // Network operations
-    pub async fn get_routes(&self) -> Result<Vec<Route>> {
-        let cmd = Command::NetworkGetRoutes;
+    pub async fn get_vlans(&self) -> Result<Vec<VlanConfig>> {
+        let cmd = Command::NetworkGetVlans;
         let response = self.send_and_wait_for_event(
             cmd,
-            |event_type, _| event_type == "network_routes_updated",
+            |event_type, _| event_type == "NetworkVlansUpdated" || event_type == "network_vlans_updated",
             5
         ).await?;
         
-        // Extract routes from the event
-        if let Some(routes_array) = response.get("routes") {
-            let routes: Vec<Route> = serde_json::from_value(routes_array.clone())
-                .map_err(|e| anyhow::anyhow!("Failed to parse routes: {}", e))?;
-            Ok(routes)
+        let vlans_array = response.get("NetworkVlansUpdated").and_then(|o| o.get("vlans"))
+            .or_else(|| response.get("vlans"));
+        
+        if let Some(vlans_array) = vlans_array {
+            tracing::info!("Received vlans array");
+            let vlans: Vec<VlanConfig> = match serde_json::from_value(vlans_array.clone()) {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::error!("Failed to parse vlans: {}", e);
+                    return Err(anyhow::anyhow!("Failed to parse vlans: {}", e));
+                }
+            };
+            
+            tracing::info!("Extracted VLANs: {:?}", vlans);
+            Ok(vlans)
         } else {
             Ok(vec![])
         }
     }
-    
-    pub async fn get_firewall_rules(&self) -> Result<Vec<FirewallRule>> {
-        let cmd = Command::NetworkGetFirewallRules;
-        let response = self.send_and_wait_for_event(
-            cmd,
-            |event_type, _| event_type == "network_firewall_rules_updated",
-            5
-        ).await?;
-        
-        if let Some(rules_array) = response.get("rules") {
-            let rules: Vec<FirewallRule> = serde_json::from_value(rules_array.clone())
-                .map_err(|e| anyhow::anyhow!("Failed to parse firewall rules: {}", e))?;
-            Ok(rules)
-        } else {
-            Ok(vec![])
-        }
-    }
-    
-    pub async fn get_network_interfaces(&self) -> Result<Vec<VlanConfig>> {
+
+    pub async fn get_all_interfaces_raw(&self) -> Result<Vec<serde_json::Value>> {
         let cmd = Command::NetworkGetInterfaces;
         let response = self.send_and_wait_for_event(
             cmd,
-            |event_type, _| event_type == "NetworkInterfacesUpdated",
+            |event_type, _| event_type == "NetworkInterfacesUpdated" || event_type == "network_interfaces_updated",
             5
         ).await?;
         
-        if let Some(interfaces_array) = response.get("interfaces") {
-            // Backend sends NetworkInterface objects, each with a vlans array
-            // Extract all VLANs from all interfaces
-            let interfaces: Vec<NetworkInterfaceWrapper> = serde_json::from_value(interfaces_array.clone())
-                .map_err(|e| anyhow::anyhow!("Failed to parse interfaces: {}", e))?;
+        let interfaces_array = response.get("NetworkInterfacesUpdated").and_then(|o| o.get("interfaces"))
+            .or_else(|| response.get("interfaces"));
             
-            let mut all_vlans = Vec::new();
-            for iface in interfaces {
-                all_vlans.extend(iface.vlans);
+        if let Some(interfaces_array) = interfaces_array {
+            if let Some(arr) = interfaces_array.as_array() {
+                return Ok(arr.clone());
             }
-            Ok(all_vlans)
-        } else {
-            Ok(vec![])
         }
+        Ok(vec![])
     }
 }
 
@@ -398,49 +428,6 @@ struct NetworkInterfaceWrapper {
 }
 
 // Data types for network operations
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct Route {
-    pub destination: String,
-    pub gateway: String,
-    pub interface: String,
-    pub metric: u32,
-    pub route_type: RouteType,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
-pub enum RouteType {
-    Static,
-    Dynamic,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct FirewallRule {
-    pub id: String,
-    pub name: String,
-    pub enabled: bool,
-    pub action: FirewallAction,
-    pub direction: TrafficDirection,
-    pub protocol: Option<String>,
-    pub source_ip: Option<String>,
-    pub source_port: Option<u16>,
-    pub destination_ip: Option<String>,
-    pub destination_port: Option<u16>,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
-pub enum FirewallAction {
-    Allow,
-    Deny,
-    Log,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
-pub enum TrafficDirection {
-    Inbound,
-    Outbound,
-    Both,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct VlanConfig {
     pub id: u16,

@@ -1,61 +1,33 @@
 use dioxus::prelude::*;
 use serde::{Serialize, Deserialize};
+use crate::services::backend_client::BackendClient;
 
 #[component]
 pub fn InterfaceList() -> Element {
     let mut interfaces = use_signal(|| Vec::<NetworkInterface>::new());
-    let loading = use_signal(|| false);
+    let mut loading = use_signal(|| false);
     let mut selected_interface = use_signal(|| Option::<String>::None);
     let mut show_create_bridge = use_signal(|| false);
     let mut show_edit_dialog = use_signal(|| false);
     let mut editing_interface = use_signal(|| Option::<NetworkInterface>::None);
 
-    // Load interfaces on mount - data persists in memory only for now
-    use_effect(move || {
+    let load_interfaces = move || {
         spawn(async move {
-            // Only load mock data if list is empty
-            if interfaces.read().is_empty() {
-                let mock_interfaces = vec![
-                NetworkInterface {
-                    name: "eth0".to_string(),
-                    display_name: "Ethernet 0".to_string(),
-                    mac_address: Some("52:54:00:12:34:56".to_string()),
-                    ip_addresses: vec![IpConfiguration {
-                        address: "192.168.1.100".to_string(),
-                        netmask: "/24".to_string(),
-                    }],
-                    status: InterfaceStatus::Up,
-                    mtu: 1500,
-                    interface_type: InterfaceType::Ethernet,
-                },
-                NetworkInterface {
-                    name: "wlan0".to_string(),
-                    display_name: "Wireless 0".to_string(),
-                    mac_address: Some("a4:5e:60:c2:89:1f".to_string()),
-                    ip_addresses: vec![IpConfiguration {
-                        address: "192.168.1.105".to_string(),
-                        netmask: "/24".to_string(),
-                    }],
-                    status: InterfaceStatus::Up,
-                    mtu: 1500,
-                    interface_type: InterfaceType::Wireless,
-                },
-                NetworkInterface {
-                    name: "lo".to_string(),
-                    display_name: "Loopback".to_string(),
-                    mac_address: None,
-                    ip_addresses: vec![IpConfiguration {
-                        address: "127.0.0.1".to_string(),
-                        netmask: "/8".to_string(),
-                    }],
-                    status: InterfaceStatus::Up,
-                    mtu: 65536,
-                    interface_type: InterfaceType::Loopback,
-                },
-            ];
-            interfaces.set(mock_interfaces);
+            loading.set(true);
+            let client = BackendClient::new();
+            if let Ok(raw_interfaces) = client.get_all_interfaces_raw().await {
+                let parsed: Vec<NetworkInterface> = raw_interfaces.into_iter()
+                    .filter_map(|val| serde_json::from_value(val).ok())
+                    .collect();
+                interfaces.set(parsed);
             }
+            loading.set(false);
         });
+    };
+
+    // Load interfaces on mount
+    use_effect(move || {
+        load_interfaces();
     });
 
     rsx! {
@@ -67,7 +39,13 @@ pub fn InterfaceList() -> Element {
                         class: "btn btn-secondary",
                         onclick: move |_| {
                             spawn(async move {
-                                // Refresh interfaces
+                                let client = BackendClient::new();
+                                if let Ok(raw_interfaces) = client.get_all_interfaces_raw().await {
+                                    let parsed: Vec<NetworkInterface> = raw_interfaces.into_iter()
+                                        .filter_map(|val| serde_json::from_value(val).ok())
+                                        .collect();
+                                    interfaces.set(parsed);
+                                }
                             });
                         },
                         "🔄 Refresh"
@@ -156,28 +134,19 @@ pub fn InterfaceList() -> Element {
                     on_close: move |_| show_create_bridge.set(false),
                     on_create: move |bridge: BridgeConfig| {
                         tracing::info!("[FRONTEND] Bridge creation requested: {:?}", bridge);
-                        tracing::info!("[BACKEND REQUEST] Creating bridge: name={}, interfaces={:?}, ip={:?}", 
+                        tracing::info!("[BACKEND REQUEST] Creating bridge: name={}, interfaces={:?}, ip={:?}",
                             bridge.name, bridge.interfaces, bridge.ip_config);
                         
-                        // Optimistically update UI
-                        let new_interface = NetworkInterface {
-                            name: bridge.name.clone(),
-                            display_name: format!("Bridge: {}", bridge.name),
-                            mac_address: None,
-                            ip_addresses: if let Some(ip) = bridge.ip_config.clone() {
-                                vec![IpConfiguration {
-                                    address: ip.split('/').next().unwrap_or("").to_string(),
-                                    netmask: format!("/{}", ip.split('/').nth(1).unwrap_or("24")),
-                                }]
-                            } else {
-                                vec![]
-                            },
-                            status: InterfaceStatus::Up,
-                            mtu: 1500,
-                            interface_type: InterfaceType::Bridge,
-                        };
-                        interfaces.write().push(new_interface);
-                        tracing::info!("[FRONTEND] Bridge added to UI: {}", bridge.name);
+                        spawn(async move {
+                            let client = BackendClient::new();
+                            if let Ok(_) = client.create_bridge(&bridge).await {
+                                tracing::info!("[BACKEND] Bridge creation command sent");
+                                if let Ok(parsed) = client.get_network_interfaces().await {
+                                    interfaces.set(parsed);
+                                }
+                            }
+                        });
+                        
                         show_create_bridge.set(false);
                     }
                 }
@@ -358,8 +327,8 @@ fn InterfaceRow(
 
 // Simplified models for frontend (should match backend models)
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct NetworkInterface {
-    name: String,
+pub struct NetworkInterface {
+    pub name: String,
     display_name: String,
     mac_address: Option<String>,
     ip_addresses: Vec<IpConfiguration>,
@@ -509,8 +478,8 @@ fn CreateBridgeDialog(
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct BridgeConfig {
-    name: String,
-    interfaces: Vec<String>,
-    ip_config: Option<String>,
+pub struct BridgeConfig {
+    pub name: String,
+    pub interfaces: Vec<String>,
+    pub ip_config: Option<String>,
 }

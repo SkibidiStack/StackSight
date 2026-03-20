@@ -58,15 +58,12 @@ impl ServiceManager {
                         let _ = system_tx.send(cmd).await;
                     }
                     Command::NetworkScanDevices |
-                    Command::NetworkAddRoute { .. } |
-                    Command::NetworkDeleteRoute { .. } |
-                    Command::NetworkGetRoutes |
-                    Command::NetworkCreateFirewallRule { .. } |
-                    Command::NetworkDeleteFirewallRule { .. } |
-                    Command::NetworkGetFirewallRules |
                     Command::NetworkCreateVlan { .. } |
                     Command::NetworkDeleteVlan { .. } |
-                    Command::NetworkGetInterfaces => {
+                    Command::NetworkGetVlans |
+                    Command::NetworkGetInterfaces |
+                    Command::NetworkCreateBridge { .. } |
+                    Command::NetworkDeleteBridge { .. } => {
                         let _ = net_tx.send(cmd).await;
                     }
                     Command::RemoteDesktopCreateConnection { .. } |

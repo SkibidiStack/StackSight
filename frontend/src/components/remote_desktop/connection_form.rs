@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
+use crate::state::{ConnectionProtocol, ConnectionStatus, RemoteConnection, Credentials};
 
 #[component]
 pub fn ConnectionForm(
     connection_id: Option<String>,
-    on_save: EventHandler<()>,
+    on_save: EventHandler<RemoteConnection>,
     on_cancel: EventHandler<()>
 ) -> Element {
     let is_edit = connection_id.is_some();
@@ -240,7 +241,21 @@ pub fn ConnectionForm(
                     button { class: "btn", onclick: move |_| on_cancel.call(()), "Cancel" }
                     button {
                         class: "btn primary",
-                        onclick: move |_| on_save.call(()),
+                        onclick: move |_| {
+                            let new_conn = RemoteConnection {
+                                id: connection_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                                name: name.read().clone(),
+                                protocol: *protocol.read(),
+                                host: host.read().clone(),
+                                port: port.read().parse().unwrap_or(22),
+                                credentials: Credentials { username: username.read().clone() },
+                                status: ConnectionStatus::Disconnected,
+                                last_connected: None,
+                                favorite: false,
+                                tags: tags.read().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
+                            };
+                            on_save.call(new_conn);
+                        },
                         if is_edit { "Save Changes" } else { "Create Connection" }
                     }
                 }
@@ -249,13 +264,6 @@ pub fn ConnectionForm(
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum ConnectionProtocol {
-    Ssh,
-    Rdp,
-    Vnc,
-    Spice,
-}
 
 #[derive(Clone, Copy, PartialEq)]
 enum AuthMethod {
