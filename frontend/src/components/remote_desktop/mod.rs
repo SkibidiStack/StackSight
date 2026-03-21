@@ -48,7 +48,10 @@ pub fn RemoteDesktopView() -> Element {
                     }
                     button {
                         class: "btn btn-primary",
-                        onclick: move |_| show_connection_dialog.set(true),
+                        onclick: move |_| {
+                            selected_connection.set(None);
+                            show_connection_dialog.set(true);
+                        },
                         "+ New Connection"
                     }
                 }
@@ -90,9 +93,7 @@ pub fn RemoteDesktopView() -> Element {
                         
                         let protocol_str = match conn.protocol {
                             crate::state::ConnectionProtocol::Ssh => "Ssh",
-                            crate::state::ConnectionProtocol::Rdp => "Rdp",
                             crate::state::ConnectionProtocol::Vnc => "Vnc",
-                            crate::state::ConnectionProtocol::Spice => "Spice",
                         };
 
                         let payload = if let Some(id) = conn_id.clone() {

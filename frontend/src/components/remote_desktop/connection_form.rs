@@ -7,27 +7,34 @@ pub fn ConnectionForm(
     on_save: EventHandler<RemoteConnection>,
     on_cancel: EventHandler<()>
 ) -> Element {
-    let is_edit = connection_id.is_some();
+    let app_state = use_context::<Signal<crate::state::AppState>>();
     
-    let mut name = use_signal(|| String::new());
-    let mut protocol = use_signal(|| ConnectionProtocol::Ssh);
-    let mut host = use_signal(|| String::new());
-    let mut port = use_signal(|| String::from("22"));
-    let mut username = use_signal(|| String::new());
-    let mut auth_method = use_signal(|| AuthMethod::Password);
-    let mut password = use_signal(|| String::new());
-    let mut private_key_path = use_signal(|| String::new());
-    let mut tags = use_signal(|| String::new());
+    // Find the connection if editing
+    let existing = connection_id.as_ref().and_then(|id| {
+        app_state.read().remote_desktop.connections.iter().find(|c| &c.id == id).cloned()
+    });
 
-    // Update port when protocol changes
+    let is_edit = existing.is_some();
+    
+    let mut name = use_signal(|| existing.as_ref().map(|c| c.name.clone()).unwrap_or_default());
+    let mut protocol = use_signal(|| existing.as_ref().map(|c| c.protocol.clone()).unwrap_or(ConnectionProtocol::Ssh));
+    let mut host = use_signal(|| existing.as_ref().map(|c| c.host.clone()).unwrap_or_default());
+    let mut port = use_signal(|| existing.as_ref().map(|c| c.port.to_string()).unwrap_or_else(|| "22".to_string()));
+    let mut username = use_signal(|| existing.as_ref().map(|c| c.credentials.username.clone()).unwrap_or_default());
+    let mut tags = use_signal(|| existing.as_ref().map(|c| c.tags.join(", ")).unwrap_or_default());
+
+    let mut protocol_changed_manually = use_signal(|| false);
+
+    // Update port when protocol changes, but only if user changed it manually
     use_effect(move || {
-        let default_port = match *protocol.read() {
-            ConnectionProtocol::Ssh => "22",
-            ConnectionProtocol::Rdp => "3389",
-            ConnectionProtocol::Vnc => "5900",
-            ConnectionProtocol::Spice => "5900",
-        };
-        port.set(default_port.to_string());
+        let p = *protocol.read();
+        if *protocol_changed_manually.read() {
+            let default_port = match p {
+                ConnectionProtocol::Ssh => "22",
+                ConnectionProtocol::Vnc => "5900",
+            };
+            port.set(default_port.to_string());
+        }
     });
 
     rsx! {
@@ -56,17 +63,14 @@ pub fn ConnectionForm(
                         class: "input",
                         style: "background: #23262d; color: #e4e6eb; border: 1px solid #3a3d47;",
                         onchange: move |e| {
+                            protocol_changed_manually.set(true);
                             protocol.set(match e.value().as_str() {
-                                "rdp" => ConnectionProtocol::Rdp,
                                 "vnc" => ConnectionProtocol::Vnc,
-                                "spice" => ConnectionProtocol::Spice,
                                 _ => ConnectionProtocol::Ssh,
                             });
                         },
                         option { value: "ssh", selected: *protocol.read() == ConnectionProtocol::Ssh, style: "background: #23262d; color: #e4e6eb;", "SSH" }
-                        option { value: "rdp", selected: *protocol.read() == ConnectionProtocol::Rdp, style: "background: #23262d; color: #e4e6eb;", "RDP" }
                         option { value: "vnc", selected: *protocol.read() == ConnectionProtocol::Vnc, style: "background: #23262d; color: #e4e6eb;", "VNC" }
-                        option { value: "spice", selected: *protocol.read() == ConnectionProtocol::Spice, style: "background: #23262d; color: #e4e6eb;", "SPICE" }
                     }
                 }
 
@@ -106,63 +110,6 @@ pub fn ConnectionForm(
 
                     if *protocol.read() == ConnectionProtocol::Ssh {
                         div { class: "form-group",
-                            label { "Authentication Method" }
-                            div { style: "display: flex; gap: 8px;",
-                                button {
-                                    r#type: "button",
-                                    class: if *auth_method.read() == AuthMethod::Password {
-                                        "btn primary"
-                                    } else {
-                                        "btn"
-                                    },
-                                    onclick: move |_| auth_method.set(AuthMethod::Password),
-                                    "Password"
-                                }
-                                button {
-                                    r#type: "button",
-                                    class: if *auth_method.read() == AuthMethod::PrivateKey {
-                                        "btn primary"
-                                    } else {
-                                        "btn"
-                                    },
-                                    onclick: move |_| auth_method.set(AuthMethod::PrivateKey),
-                                    "Private Key"
-                                }
-                            }
-                        }
-                    }
-
-                    if *auth_method.read() == AuthMethod::Password || *protocol.read() != ConnectionProtocol::Ssh {
-                        div { class: "form-group",
-                            label { "Password" }
-                            input {
-                                class: "input",
-                                r#type: "password",
-                                placeholder: "Enter password",
-                                value: "{password}",
-                                oninput: move |e| password.set(e.value().clone())
-                            }
-                            small { style: "display: block; margin-top: 4px; color: #888;",
-                                "⚠ Passwords are encrypted and stored securely"
-                            }
-                        }
-                    }
-
-                    if *auth_method.read() == AuthMethod::PrivateKey && *protocol.read() == ConnectionProtocol::Ssh {
-                        div { class: "form-group",
-                            label { "Private Key Path" }
-                            input {
-                                class: "input",
-                                r#type: "text",
-                                placeholder: "e.g., ~/.ssh/id_rsa",
-                                value: "{private_key_path}",
-                                oninput: move |e| private_key_path.set(e.value().clone())
-                            }
-                        }
-                    }
-
-                    if *protocol.read() == ConnectionProtocol::Ssh {
-                        div { class: "form-group",
                             label {
                                 input {
                                     r#type: "checkbox",
@@ -190,26 +137,6 @@ pub fn ConnectionForm(
                         }
                     }
 
-                    if *protocol.read() == ConnectionProtocol::Rdp {
-                        div { class: "form-group",
-                            label {
-                                input {
-                                    r#type: "checkbox",
-                                    checked: true,
-                                    style: "margin-right: 8px;"
-                                }
-                                "Enable Clipboard Sharing"
-                            }
-                        }
-                        div { class: "form-group",
-                            label {
-                                input {
-                                    r#type: "checkbox",
-                                    checked: true,
-                                    style: "margin-right: 8px;"
-                                }
-                                "Enable Audio"
-                            }
                         }
                     }
 
@@ -261,12 +188,4 @@ pub fn ConnectionForm(
                 }
             }
         }
-    }
-}
-
-
-#[derive(Clone, Copy, PartialEq)]
-enum AuthMethod {
-    Password,
-    PrivateKey,
-}
+    

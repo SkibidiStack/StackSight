@@ -29,15 +29,7 @@ pub fn ConnectionList(
                         onclick: move |_| filter_protocol.set(Some(ConnectionProtocol::Ssh)),
                         "SSH"
                     }
-                    button {
-                        class: if *filter_protocol.read() == Some(ConnectionProtocol::Rdp) {
-                            "btn primary"
-                        } else {
-                            "btn"
-                        },
-                        onclick: move |_| filter_protocol.set(Some(ConnectionProtocol::Rdp)),
-                        "RDP"
-                    }
+                    
                     button {
                         class: if *filter_protocol.read() == Some(ConnectionProtocol::Vnc) {
                             "btn primary"
@@ -98,9 +90,9 @@ fn ConnectionRow(
 ) -> Element {
     let protocol_label = match connection.protocol {
         ConnectionProtocol::Ssh => "SSH",
-        ConnectionProtocol::Rdp => "RDP",
+        
         ConnectionProtocol::Vnc => "VNC",
-        ConnectionProtocol::Spice => "SPICE",
+        
     };
 
     let status_class = match connection.status {

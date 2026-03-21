@@ -52,6 +52,8 @@ pub enum Command {
     NetworkGetInterfaces,
     NetworkCreateBridge { request: crate::models::network::CreateBridgeRequest },
     NetworkDeleteBridge { name: String },
+    NetworkUpdateInterface { request: crate::models::network::UpdateInterfaceRequest },
+    NetworkUpdateVlan { request: crate::models::network::VlanConfig },
     
     // Remote Desktop Commands
     RemoteDesktopCreateConnection { request: crate::models::remote_desktop::CreateConnectionRequest },

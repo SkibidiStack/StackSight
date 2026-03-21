@@ -89,7 +89,7 @@ async fn handle_socket(
                                     warn!(error = ?err, "command send failed");
                                 }
                             }
-                            Err(err) => warn!(error = ?err, "bad command json"),
+                            Err(err) => warn!(error = ?err, text = %text, "bad command json"),
                         }
                     }
                     Some(Ok(Message::Close(_))) | None => break,

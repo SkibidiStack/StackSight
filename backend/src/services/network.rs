@@ -134,6 +134,9 @@ impl NetworkService {
 
     /// Get all network interfaces
     pub async fn get_interfaces(&self) -> Result<Vec<NetworkInterface>> {
+        // Force reload bridges in case they were modified bypassing memory cache
+        let _ = self.load_bridges().await;
+
         let interfaces = self.interfaces.read().await;
         let mut result: Vec<NetworkInterface> = interfaces.values().cloned().collect();
         
@@ -164,6 +167,9 @@ impl NetworkService {
 
     /// Get all VLANs across all interfaces as a flat list
     pub async fn get_all_vlans(&self) -> Result<Vec<VlanConfig>> {
+        // Force reload from disk in case they were changed bypassing cache
+        let _ = self.load_vlans().await;
+        
         let vlans = self.vlans.read().await;
         info!("Returning {} VLANs total", vlans.len());
         Ok(vlans.clone())
@@ -380,6 +386,33 @@ impl NetworkService {
 
         Ok(())
     }
+    
+    /// Update a VLAN
+    pub async fn update_vlan(&self, request: VlanConfig) -> Result<()> {
+        info!("Updating VLAN {} (ID: {})", request.name, request.id);
+
+        let mut vlans = self.vlans.write().await;
+        let mut updated = false;
+        
+        for vlan in vlans.iter_mut() {
+            if vlan.id == request.id {
+                *vlan = request.clone();
+                updated = true;
+                break;
+            }
+        }
+        
+        if !updated {
+            return Err(anyhow!("VLAN {} not found", request.id));
+        }
+        drop(vlans);
+        
+        if let Err(e) = self.save_vlans().await {
+            info!("Failed to save VLANs: {}", e);
+        }
+
+        Ok(())
+    }
 
     pub async fn create_bridge(&self, request: CreateBridgeRequest) -> Result<BridgeConfig> {
         info!("Creating bridge {}", request.name);
@@ -442,6 +475,42 @@ impl NetworkService {
     /// Update interface configuration
     pub async fn update_interface(&self, request: UpdateInterfaceRequest) -> Result<()> {
         info!("Updating interface {}", request.interface);
+
+        // Update bridge config if it is a bridge
+        let mut bridges = self.bridges.write().await;
+        let mut bridge_updated = false;
+        for bridge in bridges.iter_mut() {
+            if bridge.name == request.interface {
+                // If the ip is provided, try to update it
+                if let Some(ip) = &request.ip_address {
+                    if ip.is_empty() {
+                        bridge.ip_config = None;
+                        bridge_updated = true;
+                    } else if let Some(netmask) = &request.netmask {
+                        if let Ok(ip_addr) = ip.parse() {
+                            bridge.ip_config = Some(crate::models::network::IpConfiguration {
+                                address: ip_addr,
+                                netmask: netmask.clone(),
+                                gateway: request.gateway.clone().and_then(|g| g.parse().ok()),
+                                version: crate::models::network::IpVersion::V4,
+                            });
+                            bridge_updated = true;
+                        } else {
+                            info!("Invalid IP address format: {}", ip);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        if bridge_updated {
+            drop(bridges);
+            if let Err(e) = self.save_bridges().await {
+                info!("Failed to save bridges: {}", e);
+            }
+        } else {
+            drop(bridges);
+        }
 
         if let (Some(ip), Some(netmask)) = (&request.ip_address, &request.netmask) {
             #[cfg(target_os = "linux")]
@@ -860,6 +929,32 @@ impl NetworkService {
                                 }
                                 Err(e) => {
                                     self.bus.publish(Event::Error { message: format!("Failed to delete bridge: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::NetworkUpdateInterface { request }) => {
+                            let result = self.update_interface(request).await;
+                            match result {
+                                Ok(()) => {
+                                    if let Ok(interfaces) = self.get_interfaces().await {
+                                        self.bus.publish(Event::NetworkInterfacesUpdated { interfaces });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to update interface: {}", e) });
+                                }
+                            }
+                        }
+                        Some(Command::NetworkUpdateVlan { request }) => {
+                            let result = self.update_vlan(request).await;
+                            match result {
+                                Ok(()) => {
+                                    if let Ok(vlans) = self.get_all_vlans().await {
+                                        self.bus.publish(Event::NetworkVlansUpdated { vlans });
+                                    }
+                                }
+                                Err(e) => {
+                                    self.bus.publish(Event::Error { message: format!("Failed to update VLAN: {}", e) });
                                 }
                             }
                         }

@@ -67,30 +67,6 @@ impl RemoteDesktopService {
             missing.push("SSH (openssh-client)");
         }
 
-        // Check RDP clients
-        #[cfg(target_os = "linux")]
-        {
-            if std::process::Command::new("xfreerdp").arg("--version").output().is_ok() {
-                available.push("RDP (xfreerdp)");
-            } else if std::process::Command::new("rdesktop").arg("-h").output().is_ok() {
-                available.push("RDP (rdesktop)");
-            } else {
-                missing.push("RDP (xfreerdp or rdesktop)");
-            }
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            // Windows has built-in RDP client (mstsc.exe)
-            available.push("RDP (built-in)");
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            // Check for Microsoft Remote Desktop
-            available.push("RDP (check Microsoft Remote Desktop app)");
-        }
-
         // Check VNC
         if std::process::Command::new("vncviewer").arg("-h").output().is_ok() {
             available.push("VNC");
@@ -213,9 +189,7 @@ impl RemoteDesktopService {
         // Default port based on protocol
         let port = request.port.unwrap_or_else(|| match request.protocol {
             ConnectionProtocol::Ssh => 22,
-            ConnectionProtocol::Rdp => 3389,
             ConnectionProtocol::Vnc => 5900,
-            ConnectionProtocol::Spice => 5900,
         });
 
         // Build credentials
@@ -248,21 +222,6 @@ impl RemoteDesktopService {
                         port_forwards: Vec::new(),
                         environment_variables: HashMap::new(),
                         command: None,
-                    })
-                } else {
-                    None
-                },
-                rdp_settings: if request.protocol == ConnectionProtocol::Rdp {
-                    Some(RdpSettings {
-                        domain: None,
-                        security: RdpSecurity::Any,
-                        console_session: false,
-                        enable_clipboard: true,
-                        enable_audio: true,
-                        enable_printer: false,
-                        enable_drive_redirection: false,
-                        shared_folders: Vec::new(),
-                        gateway: None,
                     })
                 } else {
                     None
@@ -377,9 +336,7 @@ impl RemoteDesktopService {
             connection.name, 
             match connection.protocol {
                 ConnectionProtocol::Ssh => "ssh",
-                ConnectionProtocol::Rdp => "rdp",
                 ConnectionProtocol::Vnc => "vnc",
-                ConnectionProtocol::Spice => "spice",
             },
             connection.host, 
             connection.port
@@ -395,14 +352,8 @@ impl RemoteDesktopService {
             ConnectionProtocol::Ssh => {
                 self.launch_ssh_client(&connection, &credentials).await?
             }
-            ConnectionProtocol::Rdp => {
-                self.launch_rdp_client(&connection, &credentials).await?
-            }
             ConnectionProtocol::Vnc => {
                 self.launch_vnc_client(&connection, &credentials).await?
-            }
-            ConnectionProtocol::Spice => {
-                return Err(anyhow!("SPICE protocol not yet implemented"));
             }
         };
 
@@ -528,8 +479,43 @@ impl RemoteDesktopService {
 
         debug!("Launching SSH: {} {}", command_name, final_args.join(" "));
 
-        let mut cmd = std::process::Command::new(&command_name);
-        cmd.args(&final_args);
+        #[cfg(target_os = "windows")]
+        let mut cmd = {
+            let mut c = std::process::Command::new("cmd");
+            c.arg("/C").arg("start").arg("Connecting").arg(&command_name).args(&final_args);
+            c
+        };
+
+        #[cfg(target_os = "macos")]
+        let mut cmd = {
+            let mut c = std::process::Command::new("osascript");
+            let script = format!(
+                "tell application \"Terminal\" to do script \"{} {}\"",
+                command_name,
+                final_args.join(" ")
+            );
+            c.arg("-e").arg(&script);
+            c
+        };
+
+        #[cfg(target_os = "linux")]
+        let mut cmd = {
+            let terminals = vec!["x-terminal-emulator", "gnome-terminal", "konsole", "alacritty", "kitty", "xterm"];
+            let mut selected = "xterm".to_string();
+            for term in terminals {
+                if std::process::Command::new("which").arg(term).output().map(|o| o.status.success()).unwrap_or(false) {
+                    selected = term.to_string();
+                    break;
+                }
+            }
+            let mut c = std::process::Command::new(&selected);
+            if selected == "gnome-terminal" {
+                c.arg("--").arg(&command_name).args(&final_args);
+            } else {
+                c.arg("-e").arg(&command_name).args(&final_args);
+            }
+            c
+        };
 
         cmd.stdin(Stdio::null())
            .stdout(Stdio::null())
@@ -544,114 +530,51 @@ impl RemoteDesktopService {
         Ok(child)
     }
 
-    /// Launch RDP client
-    async fn launch_rdp_client(&self, connection: &RemoteConnection, credentials: &Credentials) -> Result<Child> {
-        #[cfg(target_os = "linux")]
-        {
-            // Use xfreerdp (FreeRDP)
-            let mut args = vec![
-                format!("/v:{}:{}", connection.host, connection.port),
-                format!("/u:{}", credentials.username),
-            ];
-
-            if let AuthMethod::Password { password } = &credentials.auth_method {
-                args.push(format!("/p:{}", password));
-            }
-
-            if let Some(rdp_settings) = &connection.settings.rdp_settings {
-                if let Some(domain) = &rdp_settings.domain {
-                    args.push(format!("/d:{}", domain));
-                }
-
-                if rdp_settings.enable_clipboard {
-                    args.push("+clipboard".to_string());
-                }
-
-                if rdp_settings.enable_audio {
-                    args.push("/sound:sys:pulse".to_string());
-                }
-
-                // Add shared folders
-                for folder in &rdp_settings.shared_folders {
-                    args.push(format!("/drive:{},{}", folder.remote_name, folder.local_path));
-                }
-            }
-
-            // Display settings
-            let display = &connection.settings.display_settings;
-            if display.fullscreen {
-                args.push("/f".to_string());
-            } else if let Some(res) = &display.resolution {
-                args.push(format!("/w:{}", res.width));
-                args.push(format!("/h:{}", res.height));
-            }
-
-            debug!("Launching RDP: xfreerdp {}", args.join(" "));
-
-            let child = std::process::Command::new("xfreerdp")
-                .args(&args)
-                .spawn()
-                .context("Failed to launch RDP client")?;
-
-            Ok(child)
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            // Use built-in mstsc.exe
-            // Create temporary .rdp file
-            let rdp_content = format!(
-                "full address:s:{}:{}\nusername:s:{}\n",
-                connection.host, connection.port, credentials.username
-            );
-
-            let temp_path = std::env::temp_dir().join(format!("stacksight_{}.rdp", uuid::Uuid::new_v4()));
-            std::fs::write(&temp_path, rdp_content)?;
-
-            let child = std::process::Command::new("mstsc")
-                .arg(temp_path.to_str().unwrap())
-                .spawn()
-                .context("Failed to launch RDP client")?;
-
-            Ok(child)
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            // Use Microsoft Remote Desktop if installed
-            // Or create .rdp file and open it
-            Err(anyhow!("RDP client launch not fully implemented for macOS"))
-        }
-    }
 
     /// Launch VNC client
     async fn launch_vnc_client(&self, connection: &RemoteConnection, _credentials: &Credentials) -> Result<Child> {
         let mut args = Vec::new();
 
-        // VNC connection string
-        let vnc_url = format!("{}:{}", connection.host, connection.port);
+        // VNC connection string - use :: for port in TigerVNC, otherwise it treats it as a display number
+        let vnc_url = format!("{}::{}", connection.host, connection.port);
         args.push(vnc_url);
 
         if let Some(vnc_settings) = &connection.settings.vnc_settings {
             if vnc_settings.view_only {
-                args.push("-ViewOnly".to_string());
+                args.push("-ViewOnly=1".to_string());
             }
 
-            // Quality settings
+            // Quality settings for TigerVNC
             match vnc_settings.quality {
-                VncQuality::Low => args.push("-Quality=0".to_string()),
-                VncQuality::Medium => args.push("-Quality=5".to_string()),
-                VncQuality::High => args.push("-Quality=8".to_string()),
-                VncQuality::Lossless => args.push("-Quality=9".to_string()),
+                VncQuality::Low => {
+                    args.push("-QualityLevel=0".to_string());
+                    args.push("-CompressLevel=9".to_string());
+                },
+                VncQuality::Medium => {
+                    args.push("-QualityLevel=5".to_string());
+                    args.push("-CompressLevel=5".to_string());
+                },
+                VncQuality::High => {
+                    args.push("-QualityLevel=8".to_string());
+                    args.push("-CompressLevel=2".to_string());
+                },
+                VncQuality::Lossless => {
+                    args.push("-QualityLevel=9".to_string());
+                    args.push("-CompressLevel=0".to_string());
+                },
             }
         }
 
         debug!("Launching VNC: vncviewer {}", args.join(" "));
 
-        let child = std::process::Command::new("vncviewer")
-            .args(&args)
-            .spawn()
-            .context("Failed to launch VNC client")?;
+        let mut cmd = std::process::Command::new("vncviewer");
+        cmd.args(&args);
+        
+        cmd.stdin(Stdio::null())
+           .stdout(Stdio::null())
+           .stderr(Stdio::null());
+
+        let child = cmd.spawn().context("Failed to launch VNC client")?;
 
         Ok(child)
     }

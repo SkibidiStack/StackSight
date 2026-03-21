@@ -122,7 +122,50 @@ pub fn InterfaceList() -> Element {
                                 ifaces[pos] = updated.clone();
                             }
                             tracing::info!("[BACKEND REQUEST] Update interface: {:?}", updated);
-                            show_edit_dialog.set(false);
+                            let updated_clone = updated.clone();
+                            let mut wait_dialog = show_edit_dialog;
+                            spawn(async move {
+                                // Stop doing complicated stuff, just modify the json file directly and save it
+                                if let Some(base) = directories::BaseDirs::new() {
+                                    let path = base.config_dir().join("manager").join("network").join("bridges.json");
+                                    if path.exists() {
+                                        if let Ok(content) = std::fs::read_to_string(&path) {
+                                            if let Ok(mut bridges) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
+                                                let mut changed = false;
+                                                for bridge in bridges.iter_mut() {
+                                                    if bridge.get("name").and_then(|n| n.as_str()) == Some(updated_clone.name.as_str()) {
+                                                        if let Some(ip) = updated_clone.ip_addresses.first() {
+                                                            let ip_addr = ip.address.clone();
+                                                            let netmask = if ip.netmask.starts_with('/') { ip.netmask.clone() } else { format!("/{}", ip.netmask) };
+                                                            if !ip_addr.is_empty() {
+                                                                bridge["ip_config"] = serde_json::json!({
+                                                                    "address": ip_addr,
+                                                                    "netmask": netmask,
+                                                                    "gateway": null,
+                                                                    "version": "V4"
+                                                                });
+                                                            } else {
+                                                                bridge["ip_config"] = serde_json::Value::Null;
+                                                            }
+                                                        } else {
+                                                            bridge["ip_config"] = serde_json::Value::Null;
+                                                        }
+                                                        changed = true;
+                                                        break;
+                                                    }
+                                                }
+                                                if changed {
+                                                    if let Ok(new_content) = serde_json::to_string_pretty(&bridges) {
+                                                        let _ = std::fs::write(&path, new_content);
+                                                        tracing::info!("Saved modified bridge directly to JSON: {:?}", path);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                wait_dialog.set(false);
+                            });
                         }
                     }
                 }
@@ -137,6 +180,7 @@ pub fn InterfaceList() -> Element {
                         tracing::info!("[BACKEND REQUEST] Creating bridge: name={}, interfaces={:?}, ip={:?}",
                             bridge.name, bridge.interfaces, bridge.ip_config);
                         
+                        let mut wait_dialog = show_create_bridge;
                         spawn(async move {
                             let client = BackendClient::new();
                             if let Ok(_) = client.create_bridge(&bridge).await {
@@ -145,9 +189,8 @@ pub fn InterfaceList() -> Element {
                                     interfaces.set(parsed);
                                 }
                             }
+                            wait_dialog.set(false);
                         });
-                        
-                        show_create_bridge.set(false);
                     }
                 }
             }
@@ -329,29 +372,29 @@ fn InterfaceRow(
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct NetworkInterface {
     pub name: String,
-    display_name: String,
-    mac_address: Option<String>,
-    ip_addresses: Vec<IpConfiguration>,
-    status: InterfaceStatus,
-    mtu: u32,
-    interface_type: InterfaceType,
+    pub display_name: String,
+    pub mac_address: Option<String>,
+    pub ip_addresses: Vec<IpConfiguration>,
+    pub status: InterfaceStatus,
+    pub mtu: u32,
+    pub interface_type: InterfaceType,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct IpConfiguration {
-    address: String,
-    netmask: String,
+pub struct IpConfiguration {
+    pub address: String,
+    pub netmask: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-enum InterfaceStatus {
+pub enum InterfaceStatus {
     Up,
     Down,
     Unknown,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-enum InterfaceType {
+pub enum InterfaceType {
     Ethernet,
     Wireless,
     Virtual,

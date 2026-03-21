@@ -118,7 +118,46 @@ pub fn VlanManager() -> Element {
                             vlan_list[pos] = updated.clone();
                         }
                         tracing::info!("[BACKEND REQUEST] Update VLAN: {:?}", updated);
-                        show_edit_dialog.set(false);
+                        let updated_clone = updated.clone();
+                        let mut wait_dialog = show_edit_dialog;
+                        spawn(async move {
+                            // Just modify the json file and save it
+                            if let Some(base) = directories::BaseDirs::new() {
+                                let path = base.config_dir().join("manager").join("network").join("vlans.json");
+                                if path.exists() {
+                                    if let Ok(content) = std::fs::read_to_string(&path) {
+                                        if let Ok(mut vlans) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
+                                            let mut changed = false;
+                                            for vlan in vlans.iter_mut() {
+                                                if vlan.get("id").and_then(|id| id.as_u64()) == Some(updated_clone.id as u64) {
+                                                    vlan["name"] = serde_json::json!(updated_clone.name);
+                                                    vlan["parent_interface"] = serde_json::json!(updated_clone.parent_interface);
+                                                    if let Some(ip) = &updated_clone.ip_config {
+                                                        if ip.is_empty() {
+                                                            vlan["ip_config"] = serde_json::Value::Null;
+                                                        } else {
+                                                            vlan["ip_config"] = serde_json::json!(ip);
+                                                        }
+                                                    } else {
+                                                        vlan["ip_config"] = serde_json::Value::Null;
+                                                    }
+                                                    vlan["enabled"] = serde_json::json!(updated_clone.enabled);
+                                                    changed = true;
+                                                    break;
+                                                }
+                                            }
+                                            if changed {
+                                                if let Ok(new_content) = serde_json::to_string_pretty(&vlans) {
+                                                    let _ = std::fs::write(&path, new_content);
+                                                    tracing::info!("Saved modified VLAN directly to JSON: {:?}", path);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            wait_dialog.set(false);
+                        });
                     }
                 }
             }
@@ -153,8 +192,8 @@ pub fn VlanManager() -> Element {
                                 vlans.set(loaded_vlans);
                             }
                         }
+                        show_create_dialog.set(false);
                     });
-                    show_create_dialog.set(false);
                 }
             }
         }

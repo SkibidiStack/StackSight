@@ -519,9 +519,7 @@ pub struct RemoteDesktopState {
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq)]
 pub enum ConnectionProtocol {
     Ssh,
-    Rdp,
     Vnc,
-    Spice,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]

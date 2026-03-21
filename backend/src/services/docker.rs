@@ -1004,6 +1004,8 @@ impl DockerService {
             Command::RemoteDesktopAddToGroup { .. } |
             Command::NetworkCreateBridge { .. } |
             Command::NetworkDeleteBridge { .. } |
+            Command::NetworkUpdateInterface { .. } |
+            Command::NetworkUpdateVlan { .. } |
             Command::NetworkGetVlans |
             Command::RemoteDesktopGetGroups => {
                 // These commands are handled by other services, ignore them here

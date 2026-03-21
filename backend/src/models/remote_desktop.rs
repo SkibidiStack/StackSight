@@ -19,9 +19,7 @@ pub struct RemoteConnection {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ConnectionProtocol {
     Ssh,
-    Rdp,
     Vnc,
-    Spice,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,7 +40,6 @@ pub enum AuthMethod {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionSettings {
     pub ssh_settings: Option<SshSettings>,
-    pub rdp_settings: Option<RdpSettings>,
     pub vnc_settings: Option<VncSettings>,
     pub display_settings: DisplaySettings,
     pub tunnel_settings: Option<TunnelSettings>,
@@ -57,42 +54,6 @@ pub struct SshSettings {
     pub port_forwards: Vec<PortForward>,
     pub environment_variables: HashMap<String, String>,
     pub command: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RdpSettings {
-    pub domain: Option<String>,
-    pub security: RdpSecurity,
-    pub console_session: bool,
-    pub enable_clipboard: bool,
-    pub enable_audio: bool,
-    pub enable_printer: bool,
-    pub enable_drive_redirection: bool,
-    pub shared_folders: Vec<SharedFolder>,
-    pub gateway: Option<RdpGateway>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum RdpSecurity {
-    Rdp,
-    Tls,
-    Nla,
-    Any,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SharedFolder {
-    pub local_path: String,
-    pub remote_name: String,
-    pub read_only: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RdpGateway {
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub password: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

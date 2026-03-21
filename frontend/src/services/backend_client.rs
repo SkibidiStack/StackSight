@@ -126,6 +126,64 @@ impl BackendClient {
         Ok(())
     }
 
+    pub async fn update_interface(&self, interface: &crate::components::network::interface_list::NetworkInterface) -> Result<()> {
+        let ip_address = interface.ip_addresses.first().map(|ip| ip.address.clone());
+        let netmask = interface.ip_addresses.first().map(|ip| ip.netmask.clone());
+        let payload = serde_json::json!({
+            "type": "network_update_interface",
+            "request": {
+                "interface": interface.name,
+                "ip_address": ip_address,
+                "netmask": netmask,
+                "gateway": null,
+                "dns_servers": null,
+                "mtu": interface.mtu
+            }
+        });
+        
+        // Use an inner client that stays alive to read the event
+        let (ws_stream, _) = connect_async(&self.websocket_url).await?;
+        let (mut write, mut read) = ws_stream.split();
+        let json = serde_json::to_string(&payload)?;
+        write.send(Message::Text(json)).await?;
+        
+        // Just wait shortly so the backend has time to process before we close
+        let _ = tokio::time::timeout(std::time::Duration::from_millis(500), async {
+            while let Some(msg) = read.next().await {
+                if let Ok(Message::Text(t)) = msg {
+                    if t.contains("NetworkInterfacesUpdated") || t.contains("network_interfaces_updated") {
+                        break;
+                    }
+                }
+            }
+        }).await;
+        let _ = write.close().await;
+        Ok(())
+    }
+
+    pub async fn update_vlan(&self, vlan: &VlanConfig) -> Result<()> {
+        let payload = serde_json::json!({
+            "type": "network_update_vlan",
+            "request": vlan
+        });
+        let (ws_stream, _) = connect_async(&self.websocket_url).await?;
+        let (mut write, mut read) = ws_stream.split();
+        let json = serde_json::to_string(&payload)?;
+        write.send(Message::Text(json)).await?;
+        
+        let _ = tokio::time::timeout(std::time::Duration::from_millis(500), async {
+            while let Some(msg) = read.next().await {
+                if let Ok(Message::Text(t)) = msg {
+                    if t.contains("NetworkVlansUpdated") || t.contains("network_vlans_updated") {
+                        break;
+                    }
+                }
+            }
+        }).await;
+        let _ = write.close().await;
+        Ok(())
+    }
+
     pub async fn get_network_interfaces(&self) -> Result<Vec<crate::components::network::interface_list::NetworkInterface>> {
         let raw = self.get_all_interfaces_raw().await?;
         let parsed = raw.into_iter()
