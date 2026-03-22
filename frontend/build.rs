@@ -5,6 +5,13 @@ fn main() {
 
     let mut res = winres::WindowsResource::new();
 
+    // Disable default VERSIONINFO generation
+    res.set("ProductName", "");
+    res.set("FileDescription", "");
+    res.set("FileVersion", "");
+    res.set("ProductVersion", "");
+    // winres won't generate a VERSIONINFO block if some fields are empty, or we can just append an empty resource
+
     // Set application icon
     let icon_path = Path::new("assets/icon.ico");
     if icon_path.exists() {
