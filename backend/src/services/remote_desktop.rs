@@ -535,8 +535,8 @@ impl RemoteDesktopService {
     async fn launch_vnc_client(&self, connection: &RemoteConnection, _credentials: &Credentials) -> Result<Child> {
         let mut args = Vec::new();
 
-        // VNC connection string - use :: for port in TigerVNC, otherwise it treats it as a display number
-        let vnc_url = format!("{}::{}", connection.host, connection.port);
+        // VNC connection string - standard format uses a single colon
+        let vnc_url = format!("{}:{}", connection.host, connection.port);
         args.push(vnc_url);
 
         if let Some(vnc_settings) = &connection.settings.vnc_settings {
