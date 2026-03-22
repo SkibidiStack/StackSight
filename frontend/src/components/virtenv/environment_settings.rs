@@ -1,17 +1,20 @@
-use dioxus::prelude::*;
 use crate::state::{AppState, VirtualEnvironment};
+use dioxus::prelude::*;
 use dioxus_signals::Signal;
 
 #[component]
 pub fn EnvironmentSettings(env_id: String) -> Element {
     let app_state = use_context::<Signal<AppState>>();
-    let environment = app_state.read().virtenv.environment_list
+    let environment = app_state
+        .read()
+        .virtenv
+        .environment_list
         .iter()
         .find(|env| env.id == env_id)
         .cloned();
-    
+
     let mut active_section = use_signal(|| "general".to_string());
-    
+
     match environment {
         Some(env) => rsx! {
             div { class: "environment-settings",
@@ -24,15 +27,15 @@ pub fn EnvironmentSettings(env_id: String) -> Element {
                         }
                     }
                 }
-                
+
                 div { class: "settings-layout",
                     div { class: "settings-sidebar",
-                        SettingsNav { 
+                        SettingsNav {
                             active_section: active_section(),
                             on_section_change: move |section: String| active_section.set(section)
                         }
                     }
-                    
+
                     div { class: "settings-content",
                         match active_section().as_str() {
                             "general" => rsx! { GeneralSettings { environment: env.clone() } },
@@ -51,7 +54,7 @@ pub fn EnvironmentSettings(env_id: String) -> Element {
             div { class: "error-state",
                 "Environment not found"
             }
-        }
+        },
     }
 }
 
@@ -65,12 +68,12 @@ fn SettingsNav(active_section: String, on_section_change: EventHandler<String>) 
         ("advanced", "Advanced", "🔧"),
         ("danger", "Danger Zone", "⚠️"),
     ];
-    
+
     rsx! {
         nav { class: "settings-nav",
             for (section_id, title, icon) in sections {
                 button {
-                    class: format!("nav-item {}", 
+                    class: format!("nav-item {}",
                         if active_section == section_id { "active" } else { "" }
                     ),
                     onclick: move |_| on_section_change.call(section_id.to_string()),
@@ -87,7 +90,7 @@ fn GeneralSettings(environment: VirtualEnvironment) -> Element {
     rsx! {
         div { class: "settings-section",
             h3 { "General Settings" }
-            
+
             div { class: "setting-group",
                 h4 { "Environment Information" }
                 div { class: "setting-item",
@@ -100,7 +103,7 @@ fn GeneralSettings(environment: VirtualEnvironment) -> Element {
                     }
                     div { class: "setting-help", "Environment name cannot be changed" }
                 }
-                
+
                 div { class: "setting-item",
                     label { "Description" }
                     textarea {
@@ -108,7 +111,7 @@ fn GeneralSettings(environment: VirtualEnvironment) -> Element {
                         placeholder: "Add a description for this environment..."
                     }
                 }
-                
+
                 div { class: "setting-item",
                     label { "Language Version" }
                     select { class: "form-select",
@@ -119,7 +122,7 @@ fn GeneralSettings(environment: VirtualEnvironment) -> Element {
                     div { class: "setting-help", "Changing version will recreate the environment" }
                 }
             }
-            
+
             div { class: "setting-group",
                 h4 { "Behavior" }
                 div { class: "setting-item",
@@ -129,7 +132,7 @@ fn GeneralSettings(environment: VirtualEnvironment) -> Element {
                     }
                     div { class: "setting-help", "Automatically activate this environment when opening the associated project" }
                 }
-                
+
                 div { class: "setting-item",
                     label { class: "checkbox-label",
                         input { r#type: "checkbox" }
@@ -147,7 +150,7 @@ fn PathSettings(environment: VirtualEnvironment) -> Element {
     rsx! {
         div { class: "settings-section",
             h3 { "Path Configuration" }
-            
+
             div { class: "setting-group",
                 h4 { "Environment Paths" }
                 div { class: "setting-item",
@@ -160,7 +163,7 @@ fn PathSettings(environment: VirtualEnvironment) -> Element {
                     }
                     button { class: "btn btn-outline btn-sm", "Browse" }
                 }
-                
+
                 div { class: "setting-item",
                     label { "Python Executable" }
                     input {
@@ -174,7 +177,7 @@ fn PathSettings(environment: VirtualEnvironment) -> Element {
                         readonly: true
                     }
                 }
-                
+
                 div { class: "setting-item",
                     label { "Site Packages" }
                     input {
@@ -189,7 +192,7 @@ fn PathSettings(environment: VirtualEnvironment) -> Element {
                     }
                 }
             }
-            
+
             div { class: "setting-group",
                 h4 { "Project Association" }
                 div { class: "setting-item",
@@ -208,17 +211,19 @@ fn PathSettings(environment: VirtualEnvironment) -> Element {
 
 #[component]
 fn EnvironmentVariables(environment: VirtualEnvironment) -> Element {
-    let mut variables = use_signal(|| vec![
-        ("PYTHONPATH".to_string(), "/custom/path".to_string()),
-        ("DEBUG".to_string(), "true".to_string()),
-    ]);
+    let mut variables = use_signal(|| {
+        vec![
+            ("PYTHONPATH".to_string(), "/custom/path".to_string()),
+            ("DEBUG".to_string(), "true".to_string()),
+        ]
+    });
     let mut new_key = use_signal(|| String::new());
     let mut new_value = use_signal(|| String::new());
-    
+
     rsx! {
         div { class: "settings-section",
             h3 { "Environment Variables" }
-            
+
             div { class: "setting-group",
                 h4 { "Custom Variables" }
                 div { class: "variables-list",
@@ -236,7 +241,7 @@ fn EnvironmentVariables(environment: VirtualEnvironment) -> Element {
                                 value: "{value}",
                                 placeholder: "Variable value"
                             }
-                            button { 
+                            button {
                                 class: "btn btn-outline btn-sm remove-btn",
                                 onclick: move |_| {
                                     variables.write().remove(i);
@@ -245,7 +250,7 @@ fn EnvironmentVariables(environment: VirtualEnvironment) -> Element {
                             }
                         }
                     }
-                    
+
                     div { class: "variable-item new-variable",
                         input {
                             r#type: "text",
@@ -261,7 +266,7 @@ fn EnvironmentVariables(environment: VirtualEnvironment) -> Element {
                             placeholder: "Variable value",
                             oninput: move |evt| new_value.set(evt.value())
                         }
-                        button { 
+                        button {
                             class: "btn btn-primary btn-sm",
                             disabled: new_key().trim().is_empty(),
                             onclick: move |_| {
@@ -276,7 +281,7 @@ fn EnvironmentVariables(environment: VirtualEnvironment) -> Element {
                     }
                 }
             }
-            
+
             div { class: "setting-group",
                 h4 { "Path Variables" }
                 div { class: "setting-item",
@@ -285,7 +290,7 @@ fn EnvironmentVariables(environment: VirtualEnvironment) -> Element {
                         "Include system PATH"
                     }
                 }
-                
+
                 div { class: "setting-item",
                     label { class: "checkbox-label",
                         input { r#type: "checkbox" }
@@ -303,7 +308,7 @@ fn IntegrationSettings(environment: VirtualEnvironment) -> Element {
     rsx! {
         div { class: "settings-section",
             h3 { "IDE & Tool Integrations" }
-            
+
             div { class: "setting-group",
                 h4 { "Code Editors" }
                 div { class: "integration-item",
@@ -313,7 +318,7 @@ fn IntegrationSettings(environment: VirtualEnvironment) -> Element {
                     }
                     button { class: "btn btn-outline btn-sm", "Configure" }
                 }
-                
+
                 div { class: "integration-item",
                     div { class: "integration-info",
                         strong { "PyCharm" }
@@ -321,7 +326,7 @@ fn IntegrationSettings(environment: VirtualEnvironment) -> Element {
                     }
                     button { class: "btn btn-primary btn-sm", "Setup" }
                 }
-                
+
                 div { class: "integration-item",
                     div { class: "integration-info",
                         strong { "Jupyter" }
@@ -330,7 +335,7 @@ fn IntegrationSettings(environment: VirtualEnvironment) -> Element {
                     button { class: "btn btn-outline btn-sm", "Launch" }
                 }
             }
-            
+
             div { class: "setting-group",
                 h4 { "Version Control" }
                 div { class: "setting-item",
@@ -339,7 +344,7 @@ fn IntegrationSettings(environment: VirtualEnvironment) -> Element {
                         "Include requirements.txt in git"
                     }
                 }
-                
+
                 div { class: "setting-item",
                     label { class: "checkbox-label",
                         input { r#type: "checkbox" }
@@ -356,7 +361,7 @@ fn AdvancedSettings(environment: VirtualEnvironment) -> Element {
     rsx! {
         div { class: "settings-section",
             h3 { "Advanced Settings" }
-            
+
             div { class: "setting-group",
                 h4 { "Python Configuration" }
                 div { class: "setting-item",
@@ -367,14 +372,14 @@ fn AdvancedSettings(environment: VirtualEnvironment) -> Element {
                         option { value: "2", "2 - Remove docstrings" }
                     }
                 }
-                
+
                 div { class: "setting-item",
                     label { class: "checkbox-label",
                         input { r#type: "checkbox" }
                         "Enable hash randomization"
                     }
                 }
-                
+
                 div { class: "setting-item",
                     label { class: "checkbox-label",
                         input { r#type: "checkbox" }
@@ -382,7 +387,7 @@ fn AdvancedSettings(environment: VirtualEnvironment) -> Element {
                     }
                 }
             }
-            
+
             div { class: "setting-group",
                 h4 { "Package Management" }
                 div { class: "setting-item",
@@ -394,7 +399,7 @@ fn AdvancedSettings(environment: VirtualEnvironment) -> Element {
                         placeholder: "PyPI index URL"
                     }
                 }
-                
+
                 div { class: "setting-item",
                     label { class: "checkbox-label",
                         input { r#type: "checkbox" }
@@ -415,7 +420,7 @@ fn DangerZone(environment: VirtualEnvironment) -> Element {
             div { class: "warning-text",
                 "These actions are permanent and cannot be undone. Proceed with caution."
             }
-            
+
             div { class: "setting-group",
                 div { class: "danger-action",
                     div { class: "action-info",
@@ -424,7 +429,7 @@ fn DangerZone(environment: VirtualEnvironment) -> Element {
                     }
                     button { class: "btn btn-danger", "Reset Environment" }
                 }
-                
+
                 div { class: "danger-action",
                     div { class: "action-info",
                         strong { "Clone Environment" }
@@ -432,7 +437,7 @@ fn DangerZone(environment: VirtualEnvironment) -> Element {
                     }
                     button { class: "btn btn-outline", "Clone Environment" }
                 }
-                
+
                 div { class: "danger-action",
                     div { class: "action-info",
                         strong { "Export Environment" }
@@ -440,7 +445,7 @@ fn DangerZone(environment: VirtualEnvironment) -> Element {
                     }
                     button { class: "btn btn-outline", "Export Environment" }
                 }
-                
+
                 div { class: "danger-action",
                     div { class: "action-info",
                         strong { "Delete Environment" }

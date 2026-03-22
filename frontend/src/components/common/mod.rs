@@ -11,4 +11,3 @@ mod terminal;
 mod terminal_panel;
 
 pub use terminal::Terminal;
-

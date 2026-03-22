@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::state::SetupConfig;
+use dioxus::prelude::*;
 
 #[component]
 pub fn LanguagesStep(config: Signal<SetupConfig>) -> Element {
@@ -10,12 +10,13 @@ pub fn LanguagesStep(config: Signal<SetupConfig>) -> Element {
         detecting.set(true);
         spawn(async move {
             let mut tools = Vec::new();
-            
+
             // Detect Python
-            if let Ok(output) = tokio::process::Command::new(if cfg!(windows) { "python" } else { "python3" })
-                .arg("--version")
-                .output()
-                .await
+            if let Ok(output) =
+                tokio::process::Command::new(if cfg!(windows) { "python" } else { "python3" })
+                    .arg("--version")
+                    .output()
+                    .await
             {
                 if output.status.success() {
                     let version = String::from_utf8_lossy(&output.stdout).to_string();

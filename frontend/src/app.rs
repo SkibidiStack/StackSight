@@ -1,5 +1,7 @@
 use crate::router::AppRouter;
-use crate::state::{AppState, Command, Event, DockerfileEditor, LogsModal, SystemSnapshot, Theme, Toast, ToastType};
+use crate::state::{
+    AppState, Command, DockerfileEditor, Event, LogsModal, SystemSnapshot, Theme, Toast, ToastType,
+};
 use dioxus::prelude::*;
 use dioxus_signals::Signal;
 use futures::channel::mpsc::UnboundedReceiver;
@@ -2823,7 +2825,7 @@ pub fn AppRoot() -> Element {
             }
         })
     };
-    
+
     // Provide bridge as context for components to send commands
     let backend_bridge = BackendBridge { tx: bridge };
     use_context_provider(|| backend_bridge);
@@ -2841,7 +2843,7 @@ pub fn AppRoot() -> Element {
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_millis() as u64;
-                
+
                 let mut state = app_state.write();
                 state.ui.toasts.retain(|toast| {
                     now - toast.timestamp < 5000 // Keep toasts for 5 seconds
@@ -2855,7 +2857,7 @@ pub fn AppRoot() -> Element {
         Theme::Light => LIGHT_THEME,
         Theme::Dark => DARK_THEME,
     };
-    
+
     let full_style = format!("{}{}", theme_css, BASE_STYLE);
 
     rsx! {
@@ -2889,7 +2891,7 @@ fn ToastItem(toast: crate::state::Toast) -> Element {
         ToastType::Error => "✕",
         ToastType::Info => "ℹ",
     };
-    
+
     let class_name = match toast.toast_type {
         ToastType::Success => "toast toast-success",
         ToastType::Error => "toast toast-error",
@@ -2925,12 +2927,11 @@ type WsSink = futures_util::stream::SplitSink<
     Message,
 >;
 
-async fn send_command(
-    sink: &mut WsSink,
-    cmd: Command,
-) -> Result<(), String> {
+async fn send_command(sink: &mut WsSink, cmd: Command) -> Result<(), String> {
     let payload = serde_json::to_string(&cmd).map_err(|e| e.to_string())?;
-    sink.send(Message::Text(payload)).await.map_err(|e| e.to_string())
+    sink.send(Message::Text(payload))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), String> {
@@ -2974,38 +2975,48 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
             app_state.write().docker.volumes = volumes;
             Ok(())
         }
-        Ok(Event::DockerAction { action, ok, message }) => {
+        Ok(Event::DockerAction {
+            action,
+            ok,
+            message,
+        }) => {
             let mut state = app_state.write();
             state.docker.action.in_progress = false;
             state.docker.action.last_action = Some(action.clone());
             state.docker.action.last_ok = Some(ok);
             state.docker.action.message = message.clone();
-            
+
             // Add toast notification
-            let toast_type = if ok { ToastType::Success } else { ToastType::Error };
+            let toast_type = if ok {
+                ToastType::Success
+            } else {
+                ToastType::Error
+            };
             let toast_message = if ok {
                 format!("{} completed successfully", action)
             } else {
-                message.clone().unwrap_or_else(|| format!("{} failed", action))
+                message
+                    .clone()
+                    .unwrap_or_else(|| format!("{} failed", action))
             };
-            
+
             let toast_id = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis() as u64;
-            
+
             state.ui.toasts.push(Toast {
                 id: toast_id,
                 message: toast_message,
                 toast_type,
                 timestamp: toast_id,
             });
-            
+
             // Keep only last 5 toasts
             if state.ui.toasts.len() > 5 {
                 state.ui.toasts.remove(0);
             }
-            
+
             Ok(())
         }
         Ok(Event::DockerLogs { container_id, logs }) => {
@@ -3035,7 +3046,10 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
             Ok(())
         }
         Ok(Event::VirtualEnvList(mut environments)) => {
-            tracing::info!("Received VirtualEnvList event with {} environments from backend", environments.len());
+            tracing::info!(
+                "Received VirtualEnvList event with {} environments from backend",
+                environments.len()
+            );
             // Fix package counts if needed
             for env in &mut environments {
                 if env.package_count == 0 && !env.packages.is_empty() {
@@ -3045,24 +3059,52 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
             let mut state = app_state.write();
             state.virtenv.environment_list = environments;
             state.virtenv.environments = state.virtenv.environment_list.len();
-            state.virtenv.active = state.virtenv.environment_list.iter().filter(|e| e.is_active).count();
+            state.virtenv.active = state
+                .virtenv
+                .environment_list
+                .iter()
+                .filter(|e| e.is_active)
+                .count();
             Ok(())
         }
         Ok(Event::VirtualEnvCreated { environment }) => {
-            tracing::info!("🎉 Received VirtualEnvCreated event for environment: {} (id={})", environment.name, environment.id);
+            tracing::info!(
+                "🎉 Received VirtualEnvCreated event for environment: {} (id={})",
+                environment.name,
+                environment.id
+            );
             let mut state = app_state.write();
-            tracing::info!("📋 Before adding: {} environments in list", state.virtenv.environment_list.len());
-            
+            tracing::info!(
+                "📋 Before adding: {} environments in list",
+                state.virtenv.environment_list.len()
+            );
+
             // Check if already exists
-            if state.virtenv.environment_list.iter().any(|e| e.id == environment.id) {
-                tracing::warn!("⚠️ Environment {} already exists in list! Not adding duplicate.", environment.id);
+            if state
+                .virtenv
+                .environment_list
+                .iter()
+                .any(|e| e.id == environment.id)
+            {
+                tracing::warn!(
+                    "⚠️ Environment {} already exists in list! Not adding duplicate.",
+                    environment.id
+                );
                 return Ok(());
             }
-            
+
             state.virtenv.environment_list.push(environment);
             state.virtenv.environments = state.virtenv.environment_list.len();
-            state.virtenv.active = state.virtenv.environment_list.iter().filter(|e| e.is_active).count();
-            tracing::info!("📋 After adding: {} environments in list", state.virtenv.environment_list.len());
+            state.virtenv.active = state
+                .virtenv
+                .environment_list
+                .iter()
+                .filter(|e| e.is_active)
+                .count();
+            tracing::info!(
+                "📋 After adding: {} environments in list",
+                state.virtenv.environment_list.len()
+            );
             Ok(())
         }
         Ok(Event::VirtualEnvDeleted { env_id }) => {
@@ -3070,11 +3112,25 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
             let mut state = app_state.write();
             state.virtenv.environment_list.retain(|e| e.id != env_id);
             state.virtenv.environments = state.virtenv.environment_list.len();
-            state.virtenv.active = state.virtenv.environment_list.iter().filter(|e| e.is_active).count();
+            state.virtenv.active = state
+                .virtenv
+                .environment_list
+                .iter()
+                .filter(|e| e.is_active)
+                .count();
             Ok(())
         }
-        Ok(Event::PackageOperationCompleted { env_id, success, message }) => {
-            tracing::info!("Received PackageOperationCompleted: env_id={}, success={}, message={:?}", env_id, success, message);
+        Ok(Event::PackageOperationCompleted {
+            env_id,
+            success,
+            message,
+        }) => {
+            tracing::info!(
+                "Received PackageOperationCompleted: env_id={}, success={}, message={:?}",
+                env_id,
+                success,
+                message
+            );
             let mut state = app_state.write();
             if let Some(op) = &mut state.virtenv.package_operation {
                 if op.env_id == env_id {
@@ -3139,20 +3195,24 @@ fn apply_system_snapshot(mut app_state: Signal<AppState>, snapshot: SystemSnapsh
     if state.system.cpu_history.len() > 60 {
         state.system.cpu_history.remove(0);
     }
-    
+
     state.system.memory_history.push(snapshot.memory_used);
     if state.system.memory_history.len() > 60 {
         state.system.memory_history.remove(0);
     }
-    
+
     // Calculate total network usage for this tick
-    let (rx, tx) = state.system.networks.iter().fold((0, 0), |acc, n| (acc.0 + n.received, acc.1 + n.transmitted));
-    
+    let (rx, tx) = state
+        .system
+        .networks
+        .iter()
+        .fold((0, 0), |acc, n| (acc.0 + n.received, acc.1 + n.transmitted));
+
     state.system.network_rx_history.push(rx);
     if state.system.network_rx_history.len() > 60 {
         state.system.network_rx_history.remove(0);
     }
-    
+
     state.system.network_tx_history.push(tx);
     if state.system.network_tx_history.len() > 60 {
         state.system.network_tx_history.remove(0);
@@ -3163,7 +3223,7 @@ fn apply_system_snapshot(mut app_state: Signal<AppState>, snapshot: SystemSnapsh
 pub fn ThemeToggle() -> Element {
     let mut app_state = use_context::<Signal<AppState>>();
     let theme = app_state.read().user.theme.clone();
-    
+
     let toggle_theme = move |_| {
         let mut state = app_state.write();
         state.user.theme = match state.user.theme {
@@ -3171,12 +3231,12 @@ pub fn ThemeToggle() -> Element {
             Theme::Dark => Theme::Light,
         };
     };
-    
+
     let icon = match theme {
         Theme::Light => "🌙",
         Theme::Dark => "☀️",
     };
-    
+
     rsx! {
         button {
             class: "theme-toggle-btn",
@@ -3191,12 +3251,12 @@ pub fn ThemeToggle() -> Element {
 fn LogsModalComponent() -> Element {
     let mut app_state = use_context::<Signal<AppState>>();
     let logs_modal = app_state.read().ui.logs_modal.clone();
-    
+
     if let Some(modal) = logs_modal {
         let on_close = move |_| {
             app_state.write().ui.logs_modal = None;
         };
-        
+
         rsx! {
             div { class: "modal-overlay", onclick: on_close,
                 div { class: "modal logs-modal", onclick: move |e| e.stop_propagation(),
@@ -3221,27 +3281,27 @@ fn DockerfileEditorModal() -> Element {
     let mut app_state = use_context::<Signal<AppState>>();
     let bridge = use_context::<BackendBridge>();
     let editor = app_state.read().ui.dockerfile_editor.clone();
-    
+
     if let Some(editor_data) = editor {
         let mut dockerfile_content = use_signal(|| editor_data.dockerfile.clone());
         let path_clone = editor_data.path.clone();
-        
+
         let on_close = move |_| {
             app_state.write().ui.dockerfile_editor = None;
         };
-        
+
         let on_save = move |_| {
             let content = dockerfile_content.read().clone();
             let path = path_clone.clone();
-            
+
             bridge.send(Command::DockerSaveDockerfile {
                 path,
                 dockerfile: content,
             });
-            
+
             app_state.write().ui.dockerfile_editor = None;
         };
-        
+
         rsx! {
             div { class: "modal-overlay", onclick: on_close,
                 div { class: "modal dockerfile-editor-modal", onclick: move |e| e.stop_propagation(),
@@ -3275,14 +3335,14 @@ fn BuildConfirmationModal() -> Element {
     let mut app_state = use_context::<Signal<AppState>>();
     let bridge = use_context::<BackendBridge>();
     let build_path = app_state.read().ui.build_confirmation.clone();
-    
+
     if let Some(path) = build_path {
         let path_clone = path.clone();
-        
+
         let on_close = move |_| {
             app_state.write().ui.build_confirmation = None;
         };
-        
+
         let on_build = move |_| {
             let tag = format!("{}:latest", path_clone.split('/').last().unwrap_or("app"));
             bridge.send(Command::DockerBuildImage {
@@ -3291,7 +3351,7 @@ fn BuildConfirmationModal() -> Element {
             });
             app_state.write().ui.build_confirmation = None;
         };
-        
+
         rsx! {
             div { class: "modal-overlay", onclick: on_close,
                 div { class: "modal", onclick: move |e| e.stop_propagation(),
@@ -3312,4 +3372,3 @@ fn BuildConfirmationModal() -> Element {
         rsx! { div {} }
     }
 }
-

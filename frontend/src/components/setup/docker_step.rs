@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::state::SetupConfig;
+use dioxus::prelude::*;
 
 #[component]
 pub fn DockerStep(config: Signal<SetupConfig>) -> Element {
@@ -22,7 +22,7 @@ pub fn DockerStep(config: Signal<SetupConfig>) -> Element {
                 if cfg!(unix) && std::path::Path::new(path).exists() {
                     docker_detected.set(true);
                     docker_status.set(format!("✓ Docker found at {}", path));
-                    
+
                     let mut cfg = config();
                     cfg.docker_path = Some(path.to_string());
                     config.set(cfg);

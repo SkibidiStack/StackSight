@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::state::SetupConfig;
+use dioxus::prelude::*;
 
 #[component]
 pub fn SetupWizard(on_complete: EventHandler<SetupConfig>) -> Element {
@@ -28,7 +28,7 @@ pub fn SetupWizard(on_complete: EventHandler<SetupConfig>) -> Element {
             // Header
             div { class: "wizard-header",
                 div { class: "logo-container",
-                    img { 
+                    img {
                         src: "assets/icon.png",
                         alt: "StackSight Logo",
                         class: "wizard-logo"
@@ -41,7 +41,7 @@ pub fn SetupWizard(on_complete: EventHandler<SetupConfig>) -> Element {
                 div { class: "wizard-progress",
                     for (i , step_name) in steps.iter().enumerate() {
                         div {
-                            class: if i == current_step() { "step active" } 
+                            class: if i == current_step() { "step active" }
                                    else if i < current_step() { "step completed" }
                                    else { "step" },
                             div { class: "step-number", "{i + 1}" }
@@ -93,12 +93,12 @@ pub fn SetupWizard(on_complete: EventHandler<SetupConfig>) -> Element {
                         onclick: move |_| {
                             let mut final_config = config();
                             final_config.completed = true;
-                            
+
                             // Save configuration
                             if let Err(e) = final_config.save() {
                                 tracing::error!("Failed to save setup config: {}", e);
                             }
-                            
+
                             on_complete.call(final_config);
                         },
                         "Complete Setup ✓"

@@ -5,12 +5,16 @@ use dioxus_signals::Signal;
 #[component]
 pub fn ProcessMonitor() -> Element {
     let app_state = use_context::<Signal<AppState>>();
-    
+
     let processes = {
         let state = app_state.read();
         let mut procs = state.system.processes.clone();
         // Sort by CPU usage mainly
-        procs.sort_by(|a, b| b.cpu_usage.partial_cmp(&a.cpu_usage).unwrap_or(std::cmp::Ordering::Equal));
+        procs.sort_by(|a, b| {
+            b.cpu_usage
+                .partial_cmp(&a.cpu_usage)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         procs.truncate(20); // Top 20
         procs
     };
@@ -18,7 +22,7 @@ pub fn ProcessMonitor() -> Element {
     rsx! {
         div { class: "panel",
             h2 { "Top Processes" }
-            
+
             if processes.is_empty() {
                 div { class: "muted", "Waiting for process data..." }
             } else {
@@ -46,4 +50,3 @@ pub fn ProcessMonitor() -> Element {
         }
     }
 }
-

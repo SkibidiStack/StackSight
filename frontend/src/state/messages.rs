@@ -1,5 +1,7 @@
-use crate::state::app_state::{ContainerSummary, ImageSummary, NetworkSummary, VolumeSummary, VirtualEnvironment};
 use crate::services::backend_client::CreateEnvironmentRequest;
+use crate::state::app_state::{
+    ContainerSummary, ImageSummary, NetworkSummary, VirtualEnvironment, VolumeSummary,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -88,20 +90,52 @@ pub enum Event {
     DockerImages(Vec<ImageSummary>),
     DockerNetworks(Vec<NetworkSummary>),
     DockerVolumes(Vec<VolumeSummary>),
-    VirtualEnvSummary { total: usize, active: usize },
+    VirtualEnvSummary {
+        total: usize,
+        active: usize,
+    },
     VirtualEnvList(Vec<VirtualEnvironment>),
-    VirtualEnvCreated { environment: VirtualEnvironment },
-    VirtualEnvDeleted { env_id: String },
-    PackageOperationCompleted { env_id: String, success: bool, message: Option<String> },
-    DockerStatus { connected: bool, error: Option<String> },
-    DockerAction { action: String, ok: bool, message: Option<String> },
-    DockerLogs { container_id: String, logs: String },
-    DockerfileGenerated { path: String, dockerfile: String },
-    DockerfileSaved { path: String },
-    DockerEngineLogs { logs: String },
+    VirtualEnvCreated {
+        environment: VirtualEnvironment,
+    },
+    VirtualEnvDeleted {
+        env_id: String,
+    },
+    PackageOperationCompleted {
+        env_id: String,
+        success: bool,
+        message: Option<String>,
+    },
+    DockerStatus {
+        connected: bool,
+        error: Option<String>,
+    },
+    DockerAction {
+        action: String,
+        ok: bool,
+        message: Option<String>,
+    },
+    DockerLogs {
+        container_id: String,
+        logs: String,
+    },
+    DockerfileGenerated {
+        path: String,
+        dockerfile: String,
+    },
+    DockerfileSaved {
+        path: String,
+    },
+    DockerEngineLogs {
+        logs: String,
+    },
     NetworkTopology(NetworkTopologyData),
-    RemoteDesktopConnectionsUpdated { connections: Vec<crate::state::app_state::RemoteConnection> },
-    RemoteDesktopSessionsUpdated { sessions: Vec<crate::state::app_state::ActiveSession> },
+    RemoteDesktopConnectionsUpdated {
+        connections: Vec<crate::state::app_state::RemoteConnection>,
+    },
+    RemoteDesktopSessionsUpdated {
+        sessions: Vec<crate::state::app_state::ActiveSession>,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -114,7 +148,9 @@ pub enum NetworkDeviceType {
 }
 
 impl Default for NetworkDeviceType {
-    fn default() -> Self { NetworkDeviceType::Unknown }
+    fn default() -> Self {
+        NetworkDeviceType::Unknown
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -140,53 +176,118 @@ pub struct NetworkTopologyData {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Command {
     DockerList,
-    DockerStart { id: String },
-    DockerStop { id: String },
-    DockerRestart { id: String },
-    DockerRemoveContainer { id: String, force: bool },
-    DockerContainerLogs { id: String },
-    DockerCreateContainer { config: DockerCreateContainerConfig },
-    DockerAnalyzeFolder { path: String },
-    DockerSaveDockerfile { path: String, dockerfile: String },
+    DockerStart {
+        id: String,
+    },
+    DockerStop {
+        id: String,
+    },
+    DockerRestart {
+        id: String,
+    },
+    DockerRemoveContainer {
+        id: String,
+        force: bool,
+    },
+    DockerContainerLogs {
+        id: String,
+    },
+    DockerCreateContainer {
+        config: DockerCreateContainerConfig,
+    },
+    DockerAnalyzeFolder {
+        path: String,
+    },
+    DockerSaveDockerfile {
+        path: String,
+        dockerfile: String,
+    },
     DockerListImages,
-    DockerPullImage { image: String },
-    DockerRemoveImage { id: String, force: bool },
-    DockerRunImage { image: String },
+    DockerPullImage {
+        image: String,
+    },
+    DockerRemoveImage {
+        id: String,
+        force: bool,
+    },
+    DockerRunImage {
+        image: String,
+    },
     DockerPruneImages,
-    DockerBuildImage { context_path: String, tag: Option<String> },
-    DockerBuildFromDockerfile { path: String, dockerfile: String, tag: Option<String> },
-    DockerBuildManual { dockerfile_path: String, project_path: String, tag: String },
+    DockerBuildImage {
+        context_path: String,
+        tag: Option<String>,
+    },
+    DockerBuildFromDockerfile {
+        path: String,
+        dockerfile: String,
+        tag: Option<String>,
+    },
+    DockerBuildManual {
+        dockerfile_path: String,
+        project_path: String,
+        tag: String,
+    },
     DockerListNetworks,
-    DockerCreateNetwork { name: String, driver: String },
-    DockerRemoveNetwork { id: String },
+    DockerCreateNetwork {
+        name: String,
+        driver: String,
+    },
+    DockerRemoveNetwork {
+        id: String,
+    },
     DockerListVolumes,
-    DockerCreateVolume { name: String, driver: Option<String> },
-    DockerRemoveVolume { name: String, force: bool },
-    DockerScaffold { config: DockerScaffoldConfig },
+    DockerCreateVolume {
+        name: String,
+        driver: Option<String>,
+    },
+    DockerRemoveVolume {
+        name: String,
+        force: bool,
+    },
+    DockerScaffold {
+        config: DockerScaffoldConfig,
+    },
     DockerStartEngine,
     DockerStopEngine,
     DockerGetEngineLogs,
 
     // Virtual Environment Commands
-    VirtEnvCreate { request: CreateEnvironmentRequest },
-    VirtEnvDelete { env_id: String },
-    VirtEnvActivate { env_id: String },
-    VirtEnvDeactivate { env_id: String },
-    VirtEnvInstallPackages { operation: PackageOperation },
+    VirtEnvCreate {
+        request: CreateEnvironmentRequest,
+    },
+    VirtEnvDelete {
+        env_id: String,
+    },
+    VirtEnvActivate {
+        env_id: String,
+    },
+    VirtEnvDeactivate {
+        env_id: String,
+    },
+    VirtEnvInstallPackages {
+        operation: PackageOperation,
+    },
     VirtEnvList,
     VirtEnvGetTemplates,
 
     // System Commands
     SystemGetProcessList,
-    SystemKillProcess { pid: String },
+    SystemKillProcess {
+        pid: String,
+    },
 
     // Network Commands
     NetworkScanDevices,
 
     // Remote Desktop Commands
     RemoteDesktopGetConnections,
-    RemoteDesktopConnect { connection_id: String },
-    RemoteDesktopDisconnect { connection_id: String },
+    RemoteDesktopConnect {
+        connection_id: String,
+    },
+    RemoteDesktopDisconnect {
+        connection_id: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

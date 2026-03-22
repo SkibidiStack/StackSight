@@ -62,7 +62,7 @@ fn GroupCard(group: ConnectionGroup) -> Element {
 #[component]
 fn CreateGroupDialog(
     on_close: EventHandler<()>,
-    on_create: EventHandler<ConnectionGroup>
+    on_create: EventHandler<ConnectionGroup>,
 ) -> Element {
     let mut name = use_signal(|| String::new());
     let mut color = use_signal(|| String::from("#3B82F6"));

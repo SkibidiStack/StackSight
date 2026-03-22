@@ -11,7 +11,7 @@ pub fn NetworkManager() -> Element {
     let mut show_create = use_signal(|| false);
     let mut create_name = use_signal(|| String::new());
     let mut create_driver = use_signal(|| "bridge".to_string());
-    
+
     let snapshot = app_state.read();
     let networks = snapshot.docker.networks.clone();
     drop(snapshot);
@@ -19,10 +19,7 @@ pub fn NetworkManager() -> Element {
     let search_val = search.read().to_lowercase();
     let filtered: Vec<_> = networks
         .iter()
-        .filter(|n| {
-            search_val.is_empty()
-                || n.name.to_lowercase().contains(&search_val)
-        })
+        .filter(|n| search_val.is_empty() || n.name.to_lowercase().contains(&search_val))
         .collect();
 
     rsx! {
@@ -66,7 +63,7 @@ pub fn NetworkManager() -> Element {
                         {filtered.iter().map(|network| {
                             let id = network.id.clone();
                             let name = network.name.clone();
-                            
+
                             let on_delete = {
                                 let id = id.clone();
                                 let bridge = bridge.clone();
@@ -74,7 +71,7 @@ pub fn NetworkManager() -> Element {
                                     bridge.send(Command::DockerRemoveNetwork { id: id.clone() })
                                 }
                             };
-                            
+
                             rsx! {
                                 tr { class: "table-row", key: "{id}",
                                     td { class: "col-checkbox", input { r#type: "checkbox" } }

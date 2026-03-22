@@ -1,16 +1,19 @@
-use dioxus::prelude::*;
-use crate::state::{AppState, VirtualEnvironment};
 use crate::components::virtenv::WebPackageModal;
+use crate::state::{AppState, VirtualEnvironment};
+use dioxus::prelude::*;
 use dioxus_signals::Signal;
 
 #[component]
 pub fn EnvironmentDetail(env_id: String) -> Element {
     let app_state = use_context::<Signal<AppState>>();
-    let environment = app_state.read().virtenv.environment_list
+    let environment = app_state
+        .read()
+        .virtenv
+        .environment_list
         .iter()
         .find(|env| env.id == env_id)
         .cloned();
-    
+
     match environment {
         Some(env) => rsx! {
             div { class: "environment-detail",
@@ -22,7 +25,7 @@ pub fn EnvironmentDetail(env_id: String) -> Element {
                             if env.is_active {
                                 span { class: "status-badge active", "ACTIVE" }
                             }
-                            span { 
+                            span {
                                 class: format!("health-badge {}", env.health_status.to_lowercase()),
                                 "{env.health_status}"
                             }
@@ -30,7 +33,7 @@ pub fn EnvironmentDetail(env_id: String) -> Element {
                     }
                     div { class: "detail-actions",
                         if env.is_active {
-                            button { 
+                            button {
                                 class: "btn btn-secondary",
                                 onclick: move |_| {
                                     // TODO: Deactivate environment
@@ -38,7 +41,7 @@ pub fn EnvironmentDetail(env_id: String) -> Element {
                                 "Deactivate"
                             }
                         } else {
-                            button { 
+                            button {
                                 class: "btn btn-primary",
                                 onclick: move |_| {
                                     // TODO: Activate environment
@@ -46,21 +49,21 @@ pub fn EnvironmentDetail(env_id: String) -> Element {
                                 "Activate"
                             }
                         }
-                        button { 
+                        button {
                             class: "btn btn-outline",
                             onclick: move |_| {
                                 // TODO: Open in terminal
                             },
                             "🖥️ Terminal"
                         }
-                        button { 
+                        button {
                             class: "btn btn-outline",
                             onclick: move |_| {
                                 // TODO: Clone environment
                             },
                             "📋 Clone"
                         }
-                        button { 
+                        button {
                             class: "btn btn-danger",
                             onclick: move |_| {
                                 // TODO: Delete environment with confirmation
@@ -69,7 +72,7 @@ pub fn EnvironmentDetail(env_id: String) -> Element {
                         }
                     }
                 }
-                
+
                 div { class: "detail-tabs",
                     EnvironmentTabs { environment: env.clone() }
                 }
@@ -79,31 +82,31 @@ pub fn EnvironmentDetail(env_id: String) -> Element {
             div { class: "error-state",
                 div { class: "error-icon", "⚠️" }
                 div { class: "error-title", "Environment Not Found" }
-                div { class: "error-description", 
+                div { class: "error-description",
                     "The environment with ID {env_id} could not be found."
                 }
             }
-        }
+        },
     }
 }
 
 #[component]
 fn EnvironmentTabs(environment: VirtualEnvironment) -> Element {
     let mut active_tab = use_signal(|| "overview".to_string());
-    
+
     let tabs = vec![
         ("overview", "Overview", "📊"),
-        ("packages", "Packages", "📦"), 
+        ("packages", "Packages", "📦"),
         ("settings", "Settings", "⚙️"),
         ("activity", "Activity", "📈"),
     ];
-    
+
     rsx! {
         div { class: "tab-container",
             div { class: "tab-nav",
                 for (tab_id, title, icon) in tabs {
                     button {
-                        class: format!("tab-button {}", 
+                        class: format!("tab-button {}",
                             if active_tab() == tab_id { "active" } else { "" }
                         ),
                         onclick: move |_| active_tab.set(tab_id.to_string()),
@@ -112,7 +115,7 @@ fn EnvironmentTabs(environment: VirtualEnvironment) -> Element {
                     }
                 }
             }
-            
+
             div { class: "tab-content",
                 match active_tab().as_str() {
                     "overview" => rsx! { OverviewTab { environment: environment.clone() } },
@@ -154,11 +157,11 @@ fn OverviewTab(environment: VirtualEnvironment) -> Element {
                         span { class: "value", "{environment.package_count}" }
                     }
                 }
-                
+
                 div { class: "info-card",
                     h4 { "Health Status" }
                     div { class: "health-status",
-                        div { 
+                        div {
                             class: format!("health-indicator large {}", environment.health_status.to_lowercase()),
                             "{environment.health_status}"
                         }
@@ -169,7 +172,7 @@ fn OverviewTab(environment: VirtualEnvironment) -> Element {
                         }
                     }
                 }
-                
+
                 div { class: "info-card",
                     h4 { "Quick Actions" }
                     div { class: "quick-actions",
@@ -187,26 +190,26 @@ fn OverviewTab(environment: VirtualEnvironment) -> Element {
 #[component]
 fn PackagesTab(environment: VirtualEnvironment) -> Element {
     let mut show_web_modal = use_signal(|| false);
-    
+
     rsx! {
         div { class: "packages-tab",
             div { class: "packages-header",
                 h4 { "Installed Packages ({environment.package_count})" }
                 div { class: "packages-actions",
-                    button { 
+                    button {
                         class: "btn btn-primary",
                         onclick: move |_| {
                             // TODO: Show local install modal
                         },
-                        "📦 Install Package" 
+                        "📦 Install Package"
                     }
-                    button { 
+                    button {
                         class: "btn btn-success",
                         onclick: move |_| {
                             tracing::info!("Web package modal button clicked for environment: {}", environment.id);
                             show_web_modal.set(true);
                         },
-                        "🌐 Install from Web" 
+                        "🌐 Install from Web"
                     }
                     button { class: "btn btn-outline", "🔄 Update All" }
                     button { class: "btn btn-outline", "📄 Requirements.txt" }
@@ -224,13 +227,13 @@ fn PackagesTab(environment: VirtualEnvironment) -> Element {
                     span { class: "package-name", "Loading packages..." }
                 }
             }
-            
+
             if show_web_modal() {
                 {
                     let env_id = environment.id.clone();
                     tracing::info!("Rendering WebPackageModal for environment: {}", env_id);
                     rsx! {
-                        WebPackageModal { 
+                        WebPackageModal {
                             env_id: env_id.clone(),
                             language: environment.language.clone(),
                             on_close: move |_| {
@@ -267,7 +270,7 @@ fn SettingsTab(environment: VirtualEnvironment) -> Element {
                     }
                 }
             }
-            
+
             div { class: "settings-section",
                 h4 { "Advanced Settings" }
                 div { class: "setting-item",
@@ -283,7 +286,7 @@ fn SettingsTab(environment: VirtualEnvironment) -> Element {
                     }
                 }
             }
-            
+
             div { class: "settings-section danger",
                 h4 { "Danger Zone" }
                 button { class: "btn btn-danger", "Delete Environment" }

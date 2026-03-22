@@ -1,11 +1,11 @@
-use dioxus::prelude::*;
 use crate::state::{ConnectionProtocol, ConnectionStatus, RemoteConnection};
+use dioxus::prelude::*;
 
 #[component]
 pub fn ConnectionList(
     connections: Vec<RemoteConnection>,
     on_connect: EventHandler<String>,
-    on_edit: EventHandler<String>
+    on_edit: EventHandler<String>,
 ) -> Element {
     let loading = use_signal(|| false);
     let mut filter_protocol = use_signal(|| Option::<ConnectionProtocol>::None);
@@ -29,7 +29,7 @@ pub fn ConnectionList(
                         onclick: move |_| filter_protocol.set(Some(ConnectionProtocol::Ssh)),
                         "SSH"
                     }
-                    
+
                     button {
                         class: if *filter_protocol.read() == Some(ConnectionProtocol::Vnc) {
                             "btn primary"
@@ -86,13 +86,12 @@ pub fn ConnectionList(
 fn ConnectionRow(
     connection: RemoteConnection,
     on_connect: EventHandler<String>,
-    on_edit: EventHandler<String>
+    on_edit: EventHandler<String>,
 ) -> Element {
     let protocol_label = match connection.protocol {
         ConnectionProtocol::Ssh => "SSH",
-        
+
         ConnectionProtocol::Vnc => "VNC",
-        
     };
 
     let status_class = match connection.status {
@@ -155,4 +154,3 @@ fn ConnectionRow(
         }
     }
 }
-

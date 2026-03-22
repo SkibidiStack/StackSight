@@ -1,6 +1,6 @@
 use super::Section;
-use crate::router::Route;
 use crate::app::ThemeToggle;
+use crate::router::Route;
 use dioxus::prelude::*;
 use dioxus_router::Link;
 
@@ -68,15 +68,15 @@ fn items() -> [NavItem; 8] {
 pub fn Sidebar(section: Section) -> Element {
     rsx! {
         aside { class: "sidebar",
-            div { class: "sidebar-brand", 
+            div { class: "sidebar-brand",
                 div { class: "brand-icon", "◆" }
                 span { "StackSight" }
                 ThemeToggle {}
             }
             nav { class: "sidebar-nav",
                 for item in items() {
-                    Link { 
-                        to: item.route.clone(), 
+                    Link {
+                        to: item.route.clone(),
                         class: if item.section == section { "sidebar-item sidebar-item-active" } else { "sidebar-item" },
                         div { class: "sidebar-icon", "{item.icon}" }
                         span { "{item.label}" }

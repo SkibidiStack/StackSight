@@ -36,7 +36,7 @@ impl TerminalState {
             timestamp: chrono::Utc::now().format("%H:%M:%S").to_string(),
         });
     }
-    
+
     pub fn deactivate_environment(&mut self) {
         if let Some(env) = &self.active_env {
             self.lines.push_back(TerminalLine {
@@ -67,7 +67,7 @@ impl Default for TerminalState {
             line_type: TerminalLineType::System,
             timestamp: chrono::Utc::now().format("%H:%M:%S").to_string(),
         });
-        
+
         Self {
             lines,
             current_input: String::new(),
@@ -86,7 +86,7 @@ impl Default for TerminalState {
 pub fn Terminal() -> Element {
     let mut terminal_state = use_signal(|| TerminalState::default());
     let mut app_state = use_context::<Signal<crate::state::AppState>>();
-    
+
     let scroll_to_bottom = move || {
         println!("[TERMINAL] scroll_to_bottom called!");
         spawn(async move {
@@ -97,40 +97,40 @@ pub fn Terminal() -> Element {
                     terminal.scrollTop = terminal.scrollHeight;
                     console.log('Scrolled terminal to bottom:', terminal.scrollTop);
                 }
-                "#
+                "#,
             );
             let _ = eval.recv::<String>().await;
         });
     };
-    
+
     // Check for pending commands from other components
     use_effect(move || {
         let app_snapshot = app_state.read();
         if let Some(command) = &app_snapshot.ui.terminal_pending_command {
             let command = command.clone();
             drop(app_snapshot);
-            
+
             println!("[TERMINAL] Executing pending command: {}", command);
-            
+
             // Execute the command
             let mut state = terminal_state.write();
-            
+
             // Add command line to terminal
             state.lines.push_back(TerminalLine {
                 content: format!("$ {}", command),
                 line_type: TerminalLineType::Command,
                 timestamp: chrono::Utc::now().format("%H:%M:%S").to_string(),
             });
-            
+
             // Execute the command
             execute_command(&mut state, command);
             drop(state);
-            
+
             // Clear the pending command
             let mut app_state_write = app_state.write();
             app_state_write.ui.terminal_pending_command = None;
             drop(app_state_write);
-            
+
             // Scroll to bottom
             println!("[TERMINAL] About to call scroll_to_bottom from pending command");
             scroll_to_bottom();
@@ -156,18 +156,18 @@ pub fn Terminal() -> Element {
                     "×"
                 }
             }
-            
-            div { 
+
+            div {
                 class: "terminal-content",
                 id: "terminal-content",
                 style: "overflow-y: auto; max-height: 400px;",
                 for line in &terminal_state.read().lines {
                     TerminalLineDisplay { line: line.clone() }
                 }
-                
+
                 // Input line at the bottom
                 div { class: "terminal-input-line",
-                    span { class: "prompt", 
+                    span { class: "prompt",
                         if let Some(env) = &terminal_state.read().active_env {
                             "({env}) $ "
                         } else {
@@ -187,34 +187,34 @@ pub fn Terminal() -> Element {
                         onkeydown: move |evt| {
                             let key = evt.code();
                             let mut state = terminal_state.write();
-                            
+
                             match key {
                                 Code::Enter => {
                                     let command = state.current_input.trim().to_string();
                                     if !command.is_empty() {
                                         println!("[TERMINAL] Executing manual command: {}", command);
-                                        
+
                                         // Add command to history
                                         state.command_history.push_back(command.clone());
                                         if state.command_history.len() > 100 {
                                             state.command_history.pop_front();
                                         }
                                         state.history_index = None;
-                                        
+
                                         // Add command line
                                         state.lines.push_back(TerminalLine {
                                             content: format!("$ {}", command),
                                             line_type: TerminalLineType::Command,
                                             timestamp: chrono::Utc::now().format("%H:%M:%S").to_string(),
                                         });
-                                        
+
                                         // Execute command
                                         execute_command(&mut state, command);
-                                        
+
                                         // Clear input
                                         state.current_input.clear();
                                         drop(state);
-                                        
+
                                         // Scroll to bottom
                                         println!("[TERMINAL] About to call scroll_to_bottom from manual command");
                                         scroll_to_bottom();
@@ -263,7 +263,7 @@ fn TerminalLineDisplay(line: TerminalLine) -> Element {
         TerminalLineType::Error => "terminal-line error",
         TerminalLineType::System => "terminal-line system",
     };
-    
+
     rsx! {
         div { class: "{line_class}",
             span { class: "timestamp", "{line.timestamp}" }
@@ -284,7 +284,7 @@ fn execute_command(state: &mut TerminalState, command: String) {
         }
         return;
     }
-    
+
     execute_single_command(state, command);
 }
 
@@ -293,7 +293,7 @@ fn execute_single_command(state: &mut TerminalState, command: String) {
     if parts.is_empty() {
         return;
     }
-    
+
     match parts[0] {
         "help" => {
             let help_text = vec![
@@ -310,7 +310,7 @@ fn execute_single_command(state: &mut TerminalState, command: String) {
                 "  node <args>    - Run node in active environment",
                 "  cargo <args>   - Run cargo in active environment",
             ];
-            
+
             for line in help_text {
                 state.lines.push_back(TerminalLine {
                     content: line.to_string(),
@@ -337,7 +337,7 @@ fn execute_single_command(state: &mut TerminalState, command: String) {
         "cd" => {
             if parts.len() > 1 {
                 let new_path = parts[1];
-                
+
                 // Determine the target path
                 let target_path = if new_path.starts_with("~") {
                     // Expand tilde for home directory
@@ -354,7 +354,7 @@ fn execute_single_command(state: &mut TerminalState, command: String) {
                     let current = std::path::Path::new(&state.working_directory);
                     current.join(new_path).to_string_lossy().to_string()
                 };
-                
+
                 // Canonicalize the path to handle .. and . components
                 let path = std::path::Path::new(&target_path);
                 match path.canonicalize() {
@@ -448,7 +448,8 @@ fn execute_single_command(state: &mut TerminalState, command: String) {
                     }
                     _ => {
                         state.lines.push_back(TerminalLine {
-                            content: "Unknown env command. Use: list, activate <name>, deactivate".to_string(),
+                            content: "Unknown env command. Use: list, activate <name>, deactivate"
+                                .to_string(),
                             line_type: TerminalLineType::Error,
                             timestamp: chrono::Utc::now().format("%H:%M:%S").to_string(),
                         });
@@ -486,7 +487,7 @@ fn execute_single_command(state: &mut TerminalState, command: String) {
 
 fn execute_system_command(state: &mut TerminalState, command: &str) {
     let working_dir = state.working_directory.clone();
-    
+
     // Execute the command synchronously for now (in a real app, you'd want proper async handling)
     let result = if cfg!(target_os = "windows") {
         Command::new("cmd")
@@ -499,12 +500,12 @@ fn execute_system_command(state: &mut TerminalState, command: &str) {
             .current_dir(&working_dir)
             .output()
     };
-    
+
     match result {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
-            
+
             // Add stdout if not empty
             if !stdout.is_empty() {
                 for line in stdout.lines() {
@@ -515,7 +516,7 @@ fn execute_system_command(state: &mut TerminalState, command: &str) {
                     });
                 }
             }
-            
+
             // Add stderr if not empty
             if !stderr.is_empty() {
                 for line in stderr.lines() {
@@ -526,7 +527,7 @@ fn execute_system_command(state: &mut TerminalState, command: &str) {
                     });
                 }
             }
-            
+
             // If no output, show command completed
             if stdout.is_empty() && stderr.is_empty() {
                 state.lines.push_back(TerminalLine {

@@ -1,5 +1,5 @@
-use crate::state::{AppState, Command};
 use crate::app::BackendBridge;
+use crate::state::{AppState, Command};
 use dioxus::prelude::*;
 
 #[component]
@@ -10,13 +10,13 @@ pub fn EngineManager() -> Element {
     // Reactive reads - these will update when state changes
     let docker_state = app_state.read().docker.clone();
     let is_connected = docker_state.connected;
-    
+
     let bridge_start = bridge.clone();
     let on_start_engine = move |_| {
         tracing::info!("Start Engine button clicked");
         bridge_start.send(Command::DockerStartEngine);
     };
-    
+
     let bridge_stop = bridge.clone();
     let on_stop_engine = move |_| {
         tracing::info!("Stop Engine button clicked");
@@ -28,28 +28,28 @@ pub fn EngineManager() -> Element {
             div { class: "view-header",
                 div { class: "header-left",
                     h2 { "Docker Engine" }
-                    div { class: "status-badge", 
+                    div { class: "status-badge",
                         class: if is_connected { "status-running" } else { "status-stopped" },
                         {if is_connected { "● Running" } else { "● Stopped" }}
                     }
                 }
                 div { class: "header-actions",
                     if !is_connected {
-                        button { 
-                            class: "btn primary", 
+                        button {
+                            class: "btn primary",
                             onclick: on_start_engine,
-                            "▶ Start Engine" 
+                            "▶ Start Engine"
                         }
                     } else {
-                        button { 
-                            class: "btn danger", 
+                        button {
+                            class: "btn danger",
                             onclick: on_stop_engine,
-                            "⏹ Stop Engine" 
+                            "⏹ Stop Engine"
                         }
                     }
                 }
             }
-            
+
             div { class: "section-body", style: "padding: 24px;",
                 div { class: "engine-info-panel",
                     div { class: "info-card",
@@ -65,7 +65,7 @@ pub fn EngineManager() -> Element {
                             }
                         }
                     }
-                    
+
                     div { class: "info-card",
                         h3 { "Quick Stats" }
                         div { class: "info-row",

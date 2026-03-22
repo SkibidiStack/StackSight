@@ -11,5 +11,5 @@ mod web_package_modal;
 
 pub use environment_list::EnvironmentList;
 pub use language_selector::LanguageSelector;
-pub use project_wizard::{ProjectWizard, CreateEnvironmentForm};
+pub use project_wizard::{CreateEnvironmentForm, ProjectWizard};
 pub use web_package_modal::WebPackageModal;

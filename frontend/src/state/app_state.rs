@@ -1,6 +1,8 @@
+use crate::state::messages::{
+    Alert, DiskInfo, LoadAvg, NetworkInfo, NetworkTopologyData, ProcessInfo,
+};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use crate::state::messages::{DiskInfo, NetworkInfo, ProcessInfo, Alert, LoadAvg, NetworkTopologyData};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AppState {
@@ -143,7 +145,7 @@ impl Default for VirtualEnvState {
     fn default() -> Self {
         // Don't load from file - backend will send environments via WebSocket
         tracing::info!("Initialized VirtualEnvState - waiting for backend to send environments");
-        
+
         Self {
             environment_list: Vec::new(),
             environments: 0,
@@ -164,19 +166,19 @@ pub struct VirtualEnvironment {
     pub language: String,
     pub version: String,
     pub is_active: bool,
-    
+
     #[serde(default)]
     pub packages: Vec<BackendPackage>,
-    
+
     // We'll ignore the count from JSON and calculate it from packages array if present
-    #[serde(default, skip_deserializing)] 
+    #[serde(default, skip_deserializing)]
     pub package_count: usize,
 
     pub size_mb: Option<u64>,
-    
+
     #[serde(deserialize_with = "deserialize_friendly_date")]
     pub created_at: String,
-    
+
     #[serde(default)]
     #[serde(deserialize_with = "deserialize_friendly_date_opt")]
     pub last_used: Option<String>,
@@ -231,7 +233,7 @@ where
     // The issue is likely that "package_count" doesn't exist in the JSON, so it defaults to 0.
     // But we want it to reflect packages.len().
     // The best way is to implement a custom deserializer for the whole struct or fix it after load.
-    
+
     // Instead of complex deserialization, let's just accept the value (creates 0 if missing)
     let count = usize::deserialize(deserializer)?;
     Ok(count)
@@ -351,32 +353,41 @@ fn get_environments_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(path)
 }
 
-pub fn save_virtual_environments(environments: &[VirtualEnvironment]) -> Result<(), Box<dyn std::error::Error>> {
+pub fn save_virtual_environments(
+    environments: &[VirtualEnvironment],
+) -> Result<(), Box<dyn std::error::Error>> {
     let path = get_environments_file_path()?;
-    tracing::info!("Attempting to save {} virtual environments to: {:?}", environments.len(), path);
-    
+    tracing::info!(
+        "Attempting to save {} virtual environments to: {:?}",
+        environments.len(),
+        path
+    );
+
     let json = serde_json::to_string_pretty(environments)?;
     tracing::debug!("JSON to save: {}", json);
-    
+
     std::fs::write(&path, json)?;
-    tracing::info!("Successfully saved {} virtual environments to file", environments.len());
+    tracing::info!(
+        "Successfully saved {} virtual environments to file",
+        environments.len()
+    );
     Ok(())
 }
 
 // Test function to verify persistence is working
 pub fn test_persistence() {
     tracing::info!("Testing persistence system...");
-    
+
     match get_config_dir() {
         Ok(dir) => tracing::info!("Config directory: {:?}", dir),
         Err(e) => tracing::error!("Failed to get config directory: {}", e),
     }
-    
+
     match get_environments_file_path() {
         Ok(path) => {
             tracing::info!("Environments file path: {:?}", path);
             tracing::info!("File exists: {}", path.exists());
-        },
+        }
         Err(e) => tracing::error!("Failed to get environments file path: {}", e),
     }
 }
@@ -413,11 +424,11 @@ impl SetupConfig {
     fn load() -> Result<Self, Box<dyn std::error::Error>> {
         let mut path = get_config_dir()?;
         path.push("setup.json");
-        
+
         if !path.exists() {
             return Err("Setup config not found".into());
         }
-        
+
         let content = std::fs::read_to_string(path)?;
         let config: SetupConfig = serde_json::from_str(&content)?;
         Ok(config)
@@ -427,7 +438,7 @@ impl SetupConfig {
         let mut path = get_config_dir()?;
         std::fs::create_dir_all(&path)?;
         path.push("setup.json");
-        
+
         let json = serde_json::to_string_pretty(self)?;
         std::fs::write(path, json)?;
         Ok(())

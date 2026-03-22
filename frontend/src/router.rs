@@ -1,9 +1,9 @@
 use crate::components::{
-    docker::{ContainerList, ImageManager, NetworkManager, VolumeManager, EngineManager},
+    docker::{ContainerList, EngineManager, ImageManager, NetworkManager, VolumeManager},
     layout::{MainLayout, Section},
     monitoring::MonitoringDashboard,
-    virtenv::EnvironmentList,
     remote_desktop::RemoteDesktopView,
+    virtenv::EnvironmentList,
 };
 use dioxus::prelude::*;
 use dioxus_router::{Routable, Router};

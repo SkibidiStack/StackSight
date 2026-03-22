@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::state::SetupConfig;
+use dioxus::prelude::*;
 
 #[component]
 pub fn PathsStep(config: Signal<SetupConfig>) -> Element {

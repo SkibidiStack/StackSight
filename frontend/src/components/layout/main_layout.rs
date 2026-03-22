@@ -20,12 +20,12 @@ pub enum Section {
 pub fn MainLayout(section: Section, title: String, children: Element) -> Element {
     let mut app_state = use_context::<Signal<AppState>>();
     let terminal_visible = app_state.read().ui.terminal_visible;
-    
+
     rsx! {
         div { class: "app-shell",
             Sidebar { section }
             div { class: "content-area",
-                div { 
+                div {
                     class: format!("main-content {}", if terminal_visible { "with-terminal" } else { "" }),
                     div { class: "section-header",
                         h1 { "{title}" }

@@ -1,5 +1,5 @@
+use crate::components::monitoring::{AlertPanel, ProcessMonitor, ResourceGraphs, SystemStats};
 use dioxus::prelude::*;
-use crate::components::monitoring::{SystemStats, ProcessMonitor, AlertPanel, ResourceGraphs};
 
 #[component]
 pub fn MonitoringDashboard() -> Element {

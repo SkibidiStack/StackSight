@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
 use crate::app::BackendBridge;
 use crate::state::Command;
+use dioxus::prelude::*;
 
 #[component]
 pub fn ManualBuildModal(show: Signal<bool>) -> Element {
@@ -56,14 +56,14 @@ pub fn ManualBuildModal(show: Signal<bool>) -> Element {
         to_owned![is_building, bridge, show];
         spawn(async move {
             is_building.set(true);
-            
+
             // Use the new CLI docker build command
             bridge.send(Command::DockerBuildManual {
                 dockerfile_path: dockerfile_path_val,
                 project_path: project_path_val,
                 tag: tag.clone(),
             });
-            
+
             // Close modal after starting build
             show.set(false);
             is_building.set(false);
@@ -81,8 +81,8 @@ pub fn ManualBuildModal(show: Signal<bool>) -> Element {
                 class: "modal",
                 div {
                     style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
-                    h2 { 
-                        "Manual Image Build" 
+                    h2 {
+                        "Manual Image Build"
                     }
                     button {
                         style: "background: none; border: none; font-size: 24px; color: var(--muted); cursor: pointer; padding: 0;",
@@ -92,7 +92,7 @@ pub fn ManualBuildModal(show: Signal<bool>) -> Element {
                 }
 
                 div {
-                    
+
                     // Dockerfile selection
                     div {
                         class: "form-group",

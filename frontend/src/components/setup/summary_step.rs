@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::state::SetupConfig;
+use dioxus::prelude::*;
 
 #[component]
 pub fn SummaryStep(config: Signal<SetupConfig>) -> Element {
@@ -41,8 +41,8 @@ pub fn SummaryStep(config: Signal<SetupConfig>) -> Element {
 
                 div { class: "summary-card",
                     h3 { "🛠️ Development Tools" }
-                    if cfg.python_paths.is_empty() && cfg.node_paths.is_empty() && 
-                       cfg.rust_path.is_none() && cfg.go_path.is_none() && 
+                    if cfg.python_paths.is_empty() && cfg.node_paths.is_empty() &&
+                       cfg.rust_path.is_none() && cfg.go_path.is_none() &&
                        cfg.java_path.is_none() && cfg.dotnet_path.is_none() {
                         div { class: "config-item",
                             div { class: "status-badge info", "None detected" }

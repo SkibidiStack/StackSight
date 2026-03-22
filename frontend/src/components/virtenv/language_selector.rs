@@ -10,15 +10,18 @@ pub struct LanguageOption {
 }
 
 #[component]
-pub fn LanguageSelector(selected_language: Option<String>, on_language_select: EventHandler<String>) -> Element {
+pub fn LanguageSelector(
+    selected_language: Option<String>,
+    on_language_select: EventHandler<String>,
+) -> Element {
     let languages = get_supported_languages();
-    
+
     rsx! {
         div { class: "language-selector",
             h3 { "Select Language & Version" }
             div { class: "language-grid",
                 for lang in languages {
-                    LanguageCard { 
+                    LanguageCard {
                         language: lang.clone(),
                         selected: selected_language.as_ref().map_or(false, |s| s == &lang.id),
                         on_select: move |_| on_language_select.call(lang.id.clone())
@@ -32,7 +35,7 @@ pub fn LanguageSelector(selected_language: Option<String>, on_language_select: E
 #[component]
 fn LanguageCard(language: LanguageOption, selected: bool, on_select: EventHandler<()>) -> Element {
     rsx! {
-        div { 
+        div {
             class: format!("language-card {}", if selected { "selected" } else { "" }),
             onclick: move |_| on_select.call(()),
             div { class: format!("language-icon {}", language.logo_class) }
@@ -59,7 +62,12 @@ fn get_supported_languages() -> Vec<LanguageOption> {
         LanguageOption {
             id: "python".to_string(),
             name: "Python".to_string(),
-            versions: vec!["3.12".to_string(), "3.11".to_string(), "3.10".to_string(), "3.9".to_string()],
+            versions: vec![
+                "3.12".to_string(),
+                "3.11".to_string(),
+                "3.10".to_string(),
+                "3.9".to_string(),
+            ],
             logo_class: "logo-python".to_string(),
             description: "High-level programming language with extensive libraries".to_string(),
         },
@@ -73,9 +81,14 @@ fn get_supported_languages() -> Vec<LanguageOption> {
         LanguageOption {
             id: "rust".to_string(),
             name: "Rust".to_string(),
-            versions: vec!["stable".to_string(), "beta".to_string(), "nightly".to_string()],
+            versions: vec![
+                "stable".to_string(),
+                "beta".to_string(),
+                "nightly".to_string(),
+            ],
             logo_class: "logo-rust".to_string(),
-            description: "Systems programming language focused on safety and performance".to_string(),
+            description: "Systems programming language focused on safety and performance"
+                .to_string(),
         },
         LanguageOption {
             id: "java".to_string(),

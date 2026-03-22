@@ -19,15 +19,19 @@ pub enum VersionStatus {
 }
 
 #[component]
-pub fn VersionSelector(language: String, selected_version: Option<String>, on_version_select: EventHandler<String>) -> Element {
+pub fn VersionSelector(
+    language: String,
+    selected_version: Option<String>,
+    on_version_select: EventHandler<String>,
+) -> Element {
     let versions = get_versions_for_language(&language);
-    
+
     rsx! {
         div { class: "version-selector",
             h4 { "Select {language} Version" }
             div { class: "version-grid",
                 for version_info in versions {
-                    VersionCard { 
+                    VersionCard {
                         version_info: version_info.clone(),
                         selected: selected_version.as_ref().map_or(false, |s| s == &version_info.version),
                         on_select: {
@@ -50,7 +54,7 @@ fn VersionCard(version_info: VersionInfo, selected: bool, on_select: EventHandle
         VersionStatus::Deprecated => "deprecated",
         VersionStatus::EOL => "eol",
     };
-    
+
     let status_label = match version_info.status {
         VersionStatus::Current => "Current",
         VersionStatus::LTS => "LTS",
@@ -58,10 +62,10 @@ fn VersionCard(version_info: VersionInfo, selected: bool, on_select: EventHandle
         VersionStatus::Deprecated => "Deprecated",
         VersionStatus::EOL => "End of Life",
     };
-    
+
     rsx! {
-        div { 
-            class: format!("version-card {} {}", 
+        div {
+            class: format!("version-card {} {}",
                 status_class,
                 if selected { "selected" } else { "" }
             ),

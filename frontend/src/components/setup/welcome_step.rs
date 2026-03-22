@@ -6,7 +6,7 @@ pub fn WelcomeStep() -> Element {
         div { class: "wizard-step welcome-step",
             div { class: "welcome-content",
                 h2 { "Welcome to StackSight DevEnv Manager!" }
-                
+
                 p { class: "lead",
                     "This setup wizard will help you configure StackSight for your system. "
                     "We'll detect your development tools and set up optimal paths."

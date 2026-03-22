@@ -1,6 +1,6 @@
 use crate::app::BackendBridge;
-use crate::state::{AppState, Command, DockerScaffoldConfig};
 use crate::components::docker::ManualBuildModal;
+use crate::state::{AppState, Command, DockerScaffoldConfig};
 use dioxus::prelude::*;
 use dioxus_signals::Signal;
 
@@ -32,7 +32,10 @@ pub fn ImageManager() -> Element {
         .iter()
         .filter(|img| {
             search_val.is_empty()
-                || img.repo_tags.iter().any(|tag| tag.to_lowercase().contains(&search_val))
+                || img
+                    .repo_tags
+                    .iter()
+                    .any(|tag| tag.to_lowercase().contains(&search_val))
         })
         .collect();
 
@@ -81,23 +84,23 @@ pub fn ImageManager() -> Element {
                         style: "width: 250px;",
                         oninput: move |e| pull_image.set(e.value().clone())
                     }
-                    button { 
-                        class: "btn primary", 
-                        onclick: on_pull, 
+                    button {
+                        class: "btn primary",
+                        onclick: on_pull,
                         disabled: action.in_progress,
                         style: "display: flex; align-items: center; gap: 8px;",
                         if action.in_progress && action.last_action.as_ref().map(|a| a.contains("pull")).unwrap_or(false) {
-                            div { 
-                                class: "loading-spinner", 
-                                style: "width: 16px; height: 16px; border-width: 2px; margin: 0;" 
+                            div {
+                                class: "loading-spinner",
+                                style: "width: 16px; height: 16px; border-width: 2px; margin: 0;"
                             }
                             "Pulling..."
                         } else {
                             "Pull"
                         }
                     }
-                    button { 
-                        class: "btn", 
+                    button {
+                        class: "btn",
                         onclick: move |_| show_manual_build.set(true),
                         "Manual Build"
                     }
@@ -143,7 +146,7 @@ pub fn ImageManager() -> Element {
                             let parts: Vec<&str> = repo_tag.split(':').collect();
                             let repo = parts.first().unwrap_or(&"<none>");
                             let tag = parts.get(1).unwrap_or(&"latest");
-                            
+
                             let on_delete = {
                                 let id = id.clone();
                                 let bridge = bridge.clone();
@@ -151,7 +154,7 @@ pub fn ImageManager() -> Element {
                                     bridge.send(Command::DockerRemoveImage { id: id.clone(), force: false })
                                 }
                             };
-                            
+
                             let on_run = {
                                 let repo_tag = repo_tag.clone();
                                 let bridge = bridge.clone();
@@ -159,7 +162,7 @@ pub fn ImageManager() -> Element {
                                     bridge.send(Command::DockerRunImage { image: repo_tag.clone() })
                                 }
                             };
-                            
+
                             rsx! {
                                 tr { class: "table-row", key: "{id}",
                                     td { class: "col-checkbox", input { r#type: "checkbox" } }
@@ -172,7 +175,7 @@ pub fn ImageManager() -> Element {
                                     }
                                     td { class: "col-image", "—" }
                                     td {
-                                        div { class: "cell-sub", 
+                                        div { class: "cell-sub",
                                             {format!("{:.1} MB", img.size as f64 / 1_000_000.0)}
                                         }
                                     }
@@ -324,7 +327,7 @@ pub fn ImageManager() -> Element {
                                             .map(|s| s.trim().to_string())
                                             .filter(|s| !s.is_empty())
                                             .collect();
-                                        
+
                                         bridge.send(Command::DockerScaffold {
                                             config: DockerScaffoldConfig {
                                                 context_path: scaffold_context.read().clone(),

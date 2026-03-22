@@ -40,44 +40,48 @@ impl Default for ResourceHistory {
 pub fn ResourceGraphs() -> Element {
     let app_state = use_context::<Signal<AppState>>();
     let mut resource_history = use_signal(|| ResourceHistory::default());
-    
+
     // Update history with current values
     use_effect(move || {
         let state = app_state.read();
         let mut history = resource_history.write();
-        
+
         // Smoothing factors (0.0 = all old value, 1.0 = all new value)
         // Lower = smoother but slower response, Higher = faster but jittery
-        let cpu_mem_smoothing = 0.3;  // CPU and memory update relatively smoothly
+        let cpu_mem_smoothing = 0.3; // CPU and memory update relatively smoothly
         let network_smoothing = 0.05; // Network can spike dramatically, use heavy smoothing for persistence
-        
+
         // Add current CPU usage with smoothing
         let cpu_value = state.system.cpu_usage;
-        history.smoothed_cpu = history.smoothed_cpu * (1.0 - cpu_mem_smoothing) + cpu_value * cpu_mem_smoothing;
-        
+        history.smoothed_cpu =
+            history.smoothed_cpu * (1.0 - cpu_mem_smoothing) + cpu_value * cpu_mem_smoothing;
+
         if history.cpu_history.len() >= MAX_DATA_POINTS {
             history.cpu_history.pop_front();
         }
         history.cpu_history.push_back(cpu_value);
-        
+
         // Add current memory usage percentage with smoothing
         let mem_percent = if state.system.memory_total > 0 {
             (state.system.memory_used as f64 / state.system.memory_total as f64) * 100.0
         } else {
             0.0
         } as f32;
-        history.smoothed_mem = history.smoothed_mem * (1.0 - cpu_mem_smoothing) + mem_percent * cpu_mem_smoothing;
-        
+        history.smoothed_mem =
+            history.smoothed_mem * (1.0 - cpu_mem_smoothing) + mem_percent * cpu_mem_smoothing;
+
         if history.memory_history.len() >= MAX_DATA_POINTS {
             history.memory_history.pop_front();
         }
         history.memory_history.push_back(mem_percent);
-        
+
         // Calculate network rate (difference from last sample) in KB/s
-        let (net_rx, net_tx) = state.system.networks.iter().fold((0, 0), |acc, n| {
-            (acc.0 + n.received, acc.1 + n.transmitted)
-        });
-        
+        let (net_rx, net_tx) = state
+            .system
+            .networks
+            .iter()
+            .fold((0, 0), |acc, n| (acc.0 + n.received, acc.1 + n.transmitted));
+
         // Calculate rate based on difference from last total
         let rx_rate = if history.last_rx_total > 0 {
             let diff = net_rx.saturating_sub(history.last_rx_total);
@@ -85,35 +89,37 @@ pub fn ResourceGraphs() -> Element {
         } else {
             0.0
         };
-        
+
         let tx_rate = if history.last_tx_total > 0 {
             let diff = net_tx.saturating_sub(history.last_tx_total);
             diff as f32 / 1024.0 // KB/s
         } else {
             0.0
         };
-        
+
         // Apply more aggressive smoothing to network rates for display (prevents flickering on spikes)
-        history.smoothed_rx = history.smoothed_rx * (1.0 - network_smoothing) + rx_rate * network_smoothing;
-        history.smoothed_tx = history.smoothed_tx * (1.0 - network_smoothing) + tx_rate * network_smoothing;
-        
+        history.smoothed_rx =
+            history.smoothed_rx * (1.0 - network_smoothing) + rx_rate * network_smoothing;
+        history.smoothed_tx =
+            history.smoothed_tx * (1.0 - network_smoothing) + tx_rate * network_smoothing;
+
         // Update last totals
         history.last_rx_total = net_rx;
         history.last_tx_total = net_tx;
-        
+
         if history.network_rx_history.len() >= MAX_DATA_POINTS {
             history.network_rx_history.pop_front();
         }
         history.network_rx_history.push_back(rx_rate);
-        
+
         if history.network_tx_history.len() >= MAX_DATA_POINTS {
             history.network_tx_history.pop_front();
         }
         history.network_tx_history.push_back(tx_rate);
     });
-    
+
     let history = resource_history.read();
-    
+
     rsx! {
         div { class: "resource-graphs-container",
             ResourceGraphCard {
@@ -159,11 +165,11 @@ fn ResourceGraphCard(
     display_value: f32,
     unit: String,
     max_value: f32,
-    color: String
+    color: String,
 ) -> Element {
     // Use the smoothed display value instead of the raw last value
     let current_value = display_value;
-    
+
     // Calculate max for auto-scaling with dynamic range and padding
     let display_max = if max_value > 0.0 {
         max_value
@@ -176,14 +182,14 @@ fn ResourceGraphCard(
             10.0 // Minimum scale
         }
     };
-    
+
     // Calculate average
     let avg_value = if !data.is_empty() {
         data.iter().sum::<f32>() / data.len() as f32
     } else {
         0.0
     };
-    
+
     rsx! {
         div { class: "panel resource-graph-card",
             div { class: "graph-card-header",
@@ -193,13 +199,13 @@ fn ResourceGraphCard(
                     span { class: "avg-value", "Avg: {avg_value:.1} {unit}" }
                 }
             }
-            
+
             div { class: "graph-container",
                 svg {
                     class: "resource-graph",
                     view_box: "0 0 300 100",
                     preserve_aspect_ratio: "none",
-                    
+
                     // Grid lines
                     for i in 0..5 {
                         line {
@@ -212,7 +218,7 @@ fn ResourceGraphCard(
                             opacity: "0.3"
                         }
                     }
-                    
+
                     // Data line and area
                     if !data.is_empty() {
                         {
@@ -224,24 +230,24 @@ fn ResourceGraphCard(
                                     (x, y)
                                 })
                                 .collect::<Vec<_>>();
-                            
+
                             let line_path = line_points.iter()
                                 .map(|(x, y)| format!("{},{}", x, y))
                                 .collect::<Vec<_>>()
                                 .join(" ");
-                            
+
                             // Create properly closed area path
                             let mut area_points = line_points.clone();
                             // Add bottom-right corner
                             area_points.push((300.0, 100.0));
                             // Add bottom-left corner
                             area_points.push((0.0, 100.0));
-                            
+
                             let area_path = area_points.iter()
                                 .map(|(x, y)| format!("{},{}", x, y))
                                 .collect::<Vec<_>>()
                                 .join(" ");
-                            
+
                             rsx! {
                                 // Fill area under the line (render first so line is on top)
                                 polygon {
@@ -250,7 +256,7 @@ fn ResourceGraphCard(
                                     opacity: "0.2",
                                     stroke: "none"
                                 }
-                                
+
                                 // Line on top
                                 polyline {
                                     points: "{line_path}",
@@ -265,7 +271,7 @@ fn ResourceGraphCard(
                     }
                 }
             }
-            
+
             div { class: "graph-footer",
                 span { class: "graph-label", "Last {MAX_DATA_POINTS} samples" }
                 span { class: "graph-range", "Max: {display_max:.1} {unit}" }

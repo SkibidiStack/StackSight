@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
 use crate::components::virtenv::LanguageSelector;
 use crate::state::AppState;
+use dioxus::prelude::*;
 use dioxus_signals::Signal;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -21,7 +21,10 @@ enum PackageValidationState {
 }
 
 #[component]
-pub fn ProjectWizard(on_close: EventHandler<()>, on_create: EventHandler<CreateEnvironmentForm>) -> Element {
+pub fn ProjectWizard(
+    on_close: EventHandler<()>,
+    on_create: EventHandler<CreateEnvironmentForm>,
+) -> Element {
     let form = use_signal(|| CreateEnvironmentForm {
         name: String::new(),
         language: None,
@@ -33,15 +36,15 @@ pub fn ProjectWizard(on_close: EventHandler<()>, on_create: EventHandler<CreateE
     let mut current_step = use_signal(|| 0);
     let package_validation = use_signal(|| PackageValidationState::Idle);
     let _app_state = use_context::<Signal<AppState>>();
-    
+
     let step_titles = vec![
         "Basic Info",
-        "Language & Version", 
+        "Language & Version",
         "Template",
         "Packages",
-        "Review"
+        "Review",
     ];
-    
+
     let can_proceed = match current_step() {
         0 => !form.read().name.is_empty(),
         1 => form.read().language.is_some(),
@@ -50,23 +53,23 @@ pub fn ProjectWizard(on_close: EventHandler<()>, on_create: EventHandler<CreateE
         4 => true,
         _ => false,
     };
-    
+
     rsx! {
         div { class: "modal-overlay",
             div { class: "wizard-modal",
                 div { class: "wizard-header",
                     h2 { "Create Virtual Environment" }
-                    button { 
+                    button {
                         class: "close-btn",
                         onclick: move |_| on_close.call(()),
                         "×"
                     }
                 }
-                
+
                 div { class: "wizard-progress",
                     for (i, title) in step_titles.iter().enumerate() {
-                        div { 
-                            class: format!("progress-step {} {}", 
+                        div {
+                            class: format!("progress-step {} {}",
                                 if i <= current_step() { "active" } else { "" },
                                 if i < current_step() { "completed" } else { "" }
                             ),
@@ -75,7 +78,7 @@ pub fn ProjectWizard(on_close: EventHandler<()>, on_create: EventHandler<CreateE
                         }
                     }
                 }
-                
+
                 div { class: "wizard-content",
                     match current_step() {
                         0 => rsx! { BasicInfoStep { form: form.clone() } },
@@ -86,10 +89,10 @@ pub fn ProjectWizard(on_close: EventHandler<()>, on_create: EventHandler<CreateE
                         _ => rsx! { div { "Unknown step" } }
                     }
                 }
-                
+
                 div { class: "wizard-actions",
                     if current_step() > 0 {
-                        button { 
+                        button {
                             class: "btn btn-secondary",
                             onclick: move |_| {
                                 current_step.set(current_step() - 1);
@@ -100,14 +103,14 @@ pub fn ProjectWizard(on_close: EventHandler<()>, on_create: EventHandler<CreateE
                         div {}
                     }
                     if current_step() < 4 {
-                        button { 
+                        button {
                             class: "btn btn-primary",
                             disabled: !can_proceed,
                             onclick: move |_| current_step.set(current_step() + 1),
                             "Next"
                         }
                     } else {
-                        button { 
+                        button {
                             class: "btn btn-primary",
                             onclick: move |_| {
                                 on_create.call(form.read().clone());
@@ -137,7 +140,7 @@ fn BasicInfoStep(form: Signal<CreateEnvironmentForm>) -> Element {
                         form.write().name = evt.value();
                     }
                 }
-                div { class: "form-help", 
+                div { class: "form-help",
                     "Choose a unique name for your virtual environment"
                 }
             }
@@ -188,13 +191,13 @@ fn LanguageStep(form: Signal<CreateEnvironmentForm>) -> Element {
 fn TemplateStep(form: Signal<CreateEnvironmentForm>) -> Element {
     let app_state = use_context::<Signal<AppState>>();
     let templates = &app_state.read().virtenv.templates;
-    
+
     rsx! {
         div { class: "wizard-step",
             h3 { "Choose Template (Optional)" }
             div { class: "template-options",
-                div { 
-                    class: format!("template-card {}", 
+                div {
+                    class: format!("template-card {}",
                         if form.read().template.is_none() { "selected" } else { "" }
                     ),
                     onclick: move |_| form.write().template = None,
@@ -202,8 +205,8 @@ fn TemplateStep(form: Signal<CreateEnvironmentForm>) -> Element {
                     div { class: "template-description", "Start with a clean environment" }
                 }
                 for template in templates {
-                    div { 
-                        class: format!("template-card {}", 
+                    div {
+                        class: format!("template-card {}",
                             if form.read().template.as_ref() == Some(&template.id) { "selected" } else { "" }
                         ),
                         onclick: {
@@ -221,7 +224,10 @@ fn TemplateStep(form: Signal<CreateEnvironmentForm>) -> Element {
 }
 
 #[component]
-fn PackagesStep(form: Signal<CreateEnvironmentForm>, validation: Signal<PackageValidationState>) -> Element {
+fn PackagesStep(
+    form: Signal<CreateEnvironmentForm>,
+    validation: Signal<PackageValidationState>,
+) -> Element {
     let mut package_input = use_signal(|| String::new());
     let mut suggestions = use_signal(|| Vec::<String>::new());
     let mut last_language = use_signal(|| String::new());
@@ -313,7 +319,7 @@ fn PackagesStep(form: Signal<CreateEnvironmentForm>, validation: Signal<PackageV
                         option { value: "{pkg}" }
                     }
                 }
-                button { 
+                button {
                     class: "btn btn-secondary",
                     disabled: package_input().trim().is_empty() || matches!(validation(), PackageValidationState::Checking),
                     onclick: move |_| {
@@ -332,7 +338,7 @@ fn PackagesStep(form: Signal<CreateEnvironmentForm>, validation: Signal<PackageV
                     div { class: "package-suggestions-title", "Popular packages" }
                     div { class: "package-chip-grid",
                         for pkg in suggestions.read().iter() {
-                            button { 
+                            button {
                                 class: "package-chip",
                                 onclick: {
                                     let pkg = pkg.clone();
@@ -351,7 +357,7 @@ fn PackagesStep(form: Signal<CreateEnvironmentForm>, validation: Signal<PackageV
                     for (i, package) in form.read().packages.iter().enumerate() {
                         div { class: "package-item",
                             span { "{package}" }
-                            button { 
+                            button {
                                 class: "remove-btn",
                                 onclick: move |_| {
                                     form.write().packages.remove(i);
@@ -415,37 +421,92 @@ fn ReviewStep(form: CreateEnvironmentForm) -> Element {
 fn popular_packages(language: &str) -> Vec<String> {
     match language {
         "python" => vec![
-            "numpy", "pandas", "requests", "scipy", "matplotlib", "scikit-learn",
-            "fastapi", "flask", "django", "pydantic", "pytest", "sqlalchemy",
+            "numpy",
+            "pandas",
+            "requests",
+            "scipy",
+            "matplotlib",
+            "scikit-learn",
+            "fastapi",
+            "flask",
+            "django",
+            "pydantic",
+            "pytest",
+            "sqlalchemy",
         ],
         "node" => vec![
-            "express", "react", "react-dom", "next", "lodash", "axios",
-            "typescript", "jest", "vite", "eslint", "prettier", "pnpm",
+            "express",
+            "react",
+            "react-dom",
+            "next",
+            "lodash",
+            "axios",
+            "typescript",
+            "jest",
+            "vite",
+            "eslint",
+            "prettier",
+            "pnpm",
         ],
         "rust" => vec![
-            "tokio", "serde", "serde_json", "reqwest", "clap", "anyhow",
-            "thiserror", "tracing", "uuid", "chrono", "sqlx", "axum",
+            "tokio",
+            "serde",
+            "serde_json",
+            "reqwest",
+            "clap",
+            "anyhow",
+            "thiserror",
+            "tracing",
+            "uuid",
+            "chrono",
+            "sqlx",
+            "axum",
         ],
         "go" => vec![
-            "github.com/gin-gonic/gin", "github.com/gorilla/mux", "github.com/spf13/viper",
-            "github.com/sirupsen/logrus", "github.com/stretchr/testify", "gorm.io/gorm",
-            "github.com/go-chi/chi", "github.com/rs/zerolog", "github.com/google/uuid",
-            "github.com/jmoiron/sqlx", "github.com/pkg/errors", "go.uber.org/zap",
+            "github.com/gin-gonic/gin",
+            "github.com/gorilla/mux",
+            "github.com/spf13/viper",
+            "github.com/sirupsen/logrus",
+            "github.com/stretchr/testify",
+            "gorm.io/gorm",
+            "github.com/go-chi/chi",
+            "github.com/rs/zerolog",
+            "github.com/google/uuid",
+            "github.com/jmoiron/sqlx",
+            "github.com/pkg/errors",
+            "go.uber.org/zap",
         ],
         "dotnet" => vec![
-            "Newtonsoft.Json", "Dapper", "Serilog", "AutoMapper", "Polly", "FluentValidation",
-            "Microsoft.EntityFrameworkCore", "xunit", "NUnit", "MediatR", "Refit", "Quartz",
+            "Newtonsoft.Json",
+            "Dapper",
+            "Serilog",
+            "AutoMapper",
+            "Polly",
+            "FluentValidation",
+            "Microsoft.EntityFrameworkCore",
+            "xunit",
+            "NUnit",
+            "MediatR",
+            "Refit",
+            "Quartz",
         ],
         "java" => vec![
-            "org.springframework:spring-core", "org.springframework.boot:spring-boot-starter",
-            "com.google.guava:guava", "com.fasterxml.jackson.core:jackson-databind",
-            "org.projectlombok:lombok", "org.slf4j:slf4j-api", "ch.qos.logback:logback-classic",
-            "org.hibernate:hibernate-core", "junit:junit", "org.mockito:mockito-core",
-            "org.apache.commons:commons-lang3", "org.apache.httpcomponents:httpclient",
+            "org.springframework:spring-core",
+            "org.springframework.boot:spring-boot-starter",
+            "com.google.guava:guava",
+            "com.fasterxml.jackson.core:jackson-databind",
+            "org.projectlombok:lombok",
+            "org.slf4j:slf4j-api",
+            "ch.qos.logback:logback-classic",
+            "org.hibernate:hibernate-core",
+            "junit:junit",
+            "org.mockito:mockito-core",
+            "org.apache.commons:commons-lang3",
+            "org.apache.httpcomponents:httpclient",
         ],
         _ => vec![
-            "requests", "express", "tokio", "serde", "numpy", "pandas",
-            "lodash", "axios", "fastapi", "flask", "clap", "tracing",
+            "requests", "express", "tokio", "serde", "numpy", "pandas", "lodash", "axios",
+            "fastapi", "flask", "clap", "tracing",
         ],
     }
     .iter()

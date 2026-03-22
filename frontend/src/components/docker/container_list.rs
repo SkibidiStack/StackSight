@@ -288,7 +288,7 @@ pub fn ContainerList() -> Element {
                                         } else {
                                             Some(cmd_str.split_whitespace().map(|s| s.to_string()).collect())
                                         };
-                                        
+
                                         bridge.send(Command::DockerCreateContainer {
                                             config: DockerCreateContainerConfig {
                                                 name: create_name.read().clone(),

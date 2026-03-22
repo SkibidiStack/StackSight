@@ -1,8 +1,8 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use futures_util::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 // Re-export common types needed for communication
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -24,7 +24,7 @@ impl Language {
     pub fn as_str(&self) -> &str {
         match self {
             Language::Python => "python",
-            Language::Node => "node", 
+            Language::Node => "node",
             Language::Rust => "rust",
             Language::Go => "go",
             Language::DotNet => "dotnet",
@@ -83,26 +83,51 @@ pub struct CreateBridgeRequest {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Command {
-    VirtEnvCreate { request: CreateEnvironmentRequest },
-    VirtEnvDelete { env_id: String },
-    VirtEnvActivate { env_id: String },
-    VirtEnvDeactivate { env_id: String },
-    VirtEnvInstallPackages { operation: PackageOperation },
+    VirtEnvCreate {
+        request: CreateEnvironmentRequest,
+    },
+    VirtEnvDelete {
+        env_id: String,
+    },
+    VirtEnvActivate {
+        env_id: String,
+    },
+    VirtEnvDeactivate {
+        env_id: String,
+    },
+    VirtEnvInstallPackages {
+        operation: PackageOperation,
+    },
     VirtEnvList,
     VirtEnvGetTemplates,
     SystemGetProcessList,
-    SystemKillProcess { pid: String },
+    SystemKillProcess {
+        pid: String,
+    },
     NetworkScanDevices,
-    NetworkCreateVlan { request: CreateVlanRequest },
-    NetworkDeleteVlan { parent_interface: String, vlan_id: u16 },
+    NetworkCreateVlan {
+        request: CreateVlanRequest,
+    },
+    NetworkDeleteVlan {
+        parent_interface: String,
+        vlan_id: u16,
+    },
     NetworkGetVlans,
     NetworkGetInterfaces,
-    NetworkCreateBridge { request: CreateBridgeRequest },
-    NetworkDeleteBridge { name: String },
+    NetworkCreateBridge {
+        request: CreateBridgeRequest,
+    },
+    NetworkDeleteBridge {
+        name: String,
+    },
     RemoteDesktopGetConnections,
     RemoteDesktopGetGroups,
-    RemoteDesktopConnect { connection_id: String },
-    RemoteDesktopDisconnect { connection_id: String },
+    RemoteDesktopConnect {
+        connection_id: String,
+    },
+    RemoteDesktopDisconnect {
+        connection_id: String,
+    },
 }
 
 pub struct BackendClient {
@@ -119,7 +144,7 @@ impl BackendClient {
         let (mut write, mut read) = ws_stream.split();
         let json = serde_json::to_string(&payload)?;
         write.send(Message::Text(json)).await?;
-        
+
         let _ = tokio::time::timeout(std::time::Duration::from_millis(500), async {
             while let Some(msg) = read.next().await {
                 if let Ok(Message::Text(t)) = msg {
@@ -128,7 +153,8 @@ impl BackendClient {
                     }
                 }
             }
-        }).await;
+        })
+        .await;
         let _ = write.close().await;
         Ok(())
     }
@@ -141,12 +167,15 @@ impl BackendClient {
 
     /// Send a raw JSON value over WebSocket (used for commands not in the typed enum).
     pub async fn send_ws_command(&self, payload: &serde_json::Value) -> Result<()> {
-        let (ws_stream, _) = connect_async(&self.websocket_url).await
+        let (ws_stream, _) = connect_async(&self.websocket_url)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to connect to backend: {}", e))?;
         let (mut write, _) = ws_stream.split();
         let json = serde_json::to_string(payload)
             .map_err(|e| anyhow::anyhow!("Failed to serialize: {}", e))?;
-        write.send(Message::Text(json)).await
+        write
+            .send(Message::Text(json))
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to send: {}", e))?;
         let _ = write.close().await;
         Ok(())
@@ -154,51 +183,64 @@ impl BackendClient {
 
     pub async fn send_command(&self, command: Command) -> Result<()> {
         tracing::info!("Sending command to backend: {:?}", command);
-        
+
         // Connect to WebSocket
-        let (ws_stream, _) = connect_async(&self.websocket_url).await
+        let (ws_stream, _) = connect_async(&self.websocket_url)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to connect to backend: {}", e))?;
-        
+
         let (mut write, _read) = ws_stream.split();
-        
+
         // Serialize command to JSON
         let command_json = serde_json::to_string(&command)
             .map_err(|e| anyhow::anyhow!("Failed to serialize command: {}", e))?;
-        
+
         // Send command
-        write.send(Message::Text(command_json)).await
+        write
+            .send(Message::Text(command_json))
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to send command: {}", e))?;
-        
+
         // Close connection
-        write.close().await
+        write
+            .close()
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to close connection: {}", e))?;
-        
+
         tracing::info!("Command sent successfully");
         Ok(())
     }
-    
+
     /// Send a command and wait for a specific event response
-    pub async fn send_and_wait_for_event<F>(&self, command: Command, predicate: F, timeout_secs: u64) -> Result<serde_json::Value>
+    pub async fn send_and_wait_for_event<F>(
+        &self,
+        command: Command,
+        predicate: F,
+        timeout_secs: u64,
+    ) -> Result<serde_json::Value>
     where
         F: Fn(&str, &serde_json::Value) -> bool,
     {
         use futures_util::{SinkExt, StreamExt};
-        
+
         tracing::info!("Sending command and waiting for event response");
-        
+
         // Connect to WebSocket
-        let (ws_stream, _) = connect_async(&self.websocket_url).await
+        let (ws_stream, _) = connect_async(&self.websocket_url)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to connect to backend: {}", e))?;
-        
+
         let (mut write, mut read) = ws_stream.split();
-        
+
         // Serialize and send command
         let command_json = serde_json::to_string(&command)
             .map_err(|e| anyhow::anyhow!("Failed to serialize command: {}", e))?;
-        
-        write.send(Message::Text(command_json)).await
+
+        write
+            .send(Message::Text(command_json))
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to send command: {}", e))?;
-        
+
         // Wait for the response event with timeout
         let timeout = tokio::time::Duration::from_secs(timeout_secs);
         match tokio::time::timeout(timeout, async {
@@ -228,16 +270,27 @@ impl BackendClient {
                     _ => {}
                 }
             }
-            Err(anyhow::anyhow!("WebSocket closed without receiving expected event"))
-        }).await {
+            Err(anyhow::anyhow!(
+                "WebSocket closed without receiving expected event"
+            ))
+        })
+        .await
+        {
             Ok(result) => result,
-            Err(_) => Err(anyhow::anyhow!("Timeout waiting for event after {} seconds", timeout_secs)),
+            Err(_) => Err(anyhow::anyhow!(
+                "Timeout waiting for event after {} seconds",
+                timeout_secs
+            )),
         }
     }
-    
+
     pub async fn create_environment(&self, request: CreateEnvironmentRequest) -> Result<()> {
-        tracing::info!("Creating environment: {} ({:?})", request.name, request.language);
-        
+        tracing::info!(
+            "Creating environment: {} ({:?})",
+            request.name,
+            request.language
+        );
+
         // For now, create actual virtual environment locally as a proof of concept
         // In a real implementation, this would send over WebSocket to backend
         match request.language {
@@ -248,27 +301,29 @@ impl BackendClient {
                 tracing::warn!("Language {:?} not implemented yet", request.language);
             }
         }
-        
+
         self.send_command(Command::VirtEnvCreate { request }).await
     }
-    
+
     async fn create_python_environment(&self, request: &CreateEnvironmentRequest) -> Result<()> {
         use tokio::process::Command;
-        
+
         // Determine the environment path
         let env_path = if let Some(location) = &request.location {
             std::path::PathBuf::from(location).join(&request.name)
         } else {
             // Default to user's home directory
             let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-            std::path::PathBuf::from(home).join(".virtualenvs").join(&request.name)
+            std::path::PathBuf::from(home)
+                .join(".virtualenvs")
+                .join(&request.name)
         };
-        
+
         tracing::info!("Creating Python virtual environment at: {:?}", env_path);
-        
+
         // Create the directory
         tokio::fs::create_dir_all(&env_path).await?;
-        
+
         // Determine Python command
         let python_cmd = if let Some(version) = &request.version {
             if version == "default" || version.is_empty() {
@@ -279,66 +334,78 @@ impl BackendClient {
         } else {
             "python3".to_string()
         };
-        
+
         // Create virtual environment
         let output = Command::new(&python_cmd)
             .args(&["-m", "venv", env_path.to_str().unwrap()])
             .output()
             .await?;
-        
+
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("Failed to create virtual environment: {}", error));
+            return Err(anyhow::anyhow!(
+                "Failed to create virtual environment: {}",
+                error
+            ));
         }
-        
+
         tracing::info!("Successfully created virtual environment at {:?}", env_path);
-        
+
         // Install packages if specified
         if !request.packages.is_empty() {
-            self.install_packages_in_env(&env_path, &request.packages).await?;
+            self.install_packages_in_env(&env_path, &request.packages)
+                .await?;
         }
-        
+
         Ok(())
     }
-    
-    async fn install_packages_in_env(&self, env_path: &std::path::Path, packages: &[String]) -> Result<()> {
+
+    async fn install_packages_in_env(
+        &self,
+        env_path: &std::path::Path,
+        packages: &[String],
+    ) -> Result<()> {
         use tokio::process::Command;
-        
+
         if packages.is_empty() {
             return Ok(());
         }
-        
+
         tracing::info!("Installing packages: {:?} in {:?}", packages, env_path);
-        
+
         // Determine pip path
         let pip_path = if cfg!(windows) {
             env_path.join("Scripts").join("pip.exe")
         } else {
             env_path.join("bin").join("pip")
         };
-        
+
         // Install packages
         let mut cmd = Command::new(&pip_path);
         cmd.arg("install");
         for package in packages {
             cmd.arg(package);
         }
-        
+
         let output = cmd.output().await?;
-        
+
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
             tracing::warn!("Failed to install some packages: {}", error);
         } else {
             tracing::info!("Successfully installed packages");
         }
-        
+
         Ok(())
     }
-    
+
     pub async fn install_package(&self, env_id: String, package_name: String) -> Result<()> {
-        tracing::info!("Installing single package '{}' in environment '{}'", package_name, env_id);
-        
+        tracing::info!(
+            "Installing single package '{}' in environment '{}'",
+            package_name,
+            env_id
+        );
+
         // Send the command to the backend with the env_id
         // The backend will look up the environment from its loaded data (including the correct path from JSON)
         let operation = PackageOperation {
@@ -347,42 +414,50 @@ impl BackendClient {
             packages: vec![package_name],
             options: HashMap::new(),
         };
-        
-        self.send_command(Command::VirtEnvInstallPackages { operation }).await
+
+        self.send_command(Command::VirtEnvInstallPackages { operation })
+            .await
     }
-    
+
     pub async fn delete_environment(&self, env_id: String) -> Result<()> {
         self.send_command(Command::VirtEnvDelete { env_id }).await
     }
-    
+
     pub async fn activate_environment(&self, env_id: String) -> Result<()> {
         self.send_command(Command::VirtEnvActivate { env_id }).await
     }
-    
+
     pub async fn deactivate_environment(&self, env_id: String) -> Result<()> {
-        self.send_command(Command::VirtEnvDeactivate { env_id }).await
+        self.send_command(Command::VirtEnvDeactivate { env_id })
+            .await
     }
-    
+
     pub async fn list_environments(&self) -> Result<()> {
         self.send_command(Command::VirtEnvList).await
     }
-    
+
     pub async fn get_templates(&self) -> Result<()> {
         self.send_command(Command::VirtEnvGetTemplates).await
     }
-    
+
     // Network operations
     pub async fn get_vlans(&self) -> Result<Vec<VlanConfig>> {
         let cmd = Command::NetworkGetVlans;
-        let response = self.send_and_wait_for_event(
-            cmd,
-            |event_type, _| event_type == "NetworkVlansUpdated" || event_type == "network_vlans_updated",
-            5
-        ).await?;
-        
-        let vlans_array = response.get("NetworkVlansUpdated").and_then(|o| o.get("vlans"))
+        let response = self
+            .send_and_wait_for_event(
+                cmd,
+                |event_type, _| {
+                    event_type == "NetworkVlansUpdated" || event_type == "network_vlans_updated"
+                },
+                5,
+            )
+            .await?;
+
+        let vlans_array = response
+            .get("NetworkVlansUpdated")
+            .and_then(|o| o.get("vlans"))
             .or_else(|| response.get("vlans"));
-        
+
         if let Some(vlans_array) = vlans_array {
             tracing::info!("Received vlans array");
             let vlans: Vec<VlanConfig> = match serde_json::from_value(vlans_array.clone()) {
@@ -392,7 +467,7 @@ impl BackendClient {
                     return Err(anyhow::anyhow!("Failed to parse vlans: {}", e));
                 }
             };
-            
+
             tracing::info!("Extracted VLANs: {:?}", vlans);
             Ok(vlans)
         } else {
@@ -402,15 +477,22 @@ impl BackendClient {
 
     pub async fn get_all_interfaces_raw(&self) -> Result<Vec<serde_json::Value>> {
         let cmd = Command::NetworkGetInterfaces;
-        let response = self.send_and_wait_for_event(
-            cmd,
-            |event_type, _| event_type == "NetworkInterfacesUpdated" || event_type == "network_interfaces_updated",
-            5
-        ).await?;
-        
-        let interfaces_array = response.get("NetworkInterfacesUpdated").and_then(|o| o.get("interfaces"))
+        let response = self
+            .send_and_wait_for_event(
+                cmd,
+                |event_type, _| {
+                    event_type == "NetworkInterfacesUpdated"
+                        || event_type == "network_interfaces_updated"
+                },
+                5,
+            )
+            .await?;
+
+        let interfaces_array = response
+            .get("NetworkInterfacesUpdated")
+            .and_then(|o| o.get("interfaces"))
             .or_else(|| response.get("interfaces"));
-            
+
         if let Some(interfaces_array) = interfaces_array {
             if let Some(arr) = interfaces_array.as_array() {
                 return Ok(arr.clone());

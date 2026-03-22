@@ -1,22 +1,25 @@
-use dioxus::prelude::*;
-use crate::state::{AppState, PackageOperationStatus};
 use crate::components::virtenv::WebPackageModal;
+use crate::state::{AppState, PackageOperationStatus};
+use dioxus::prelude::*;
 use dioxus_signals::Signal;
 
 #[component]
 pub fn PackageManager(env_id: String) -> Element {
     let app_state = use_context::<Signal<AppState>>();
-    let environment = app_state.read().virtenv.environment_list
+    let environment = app_state
+        .read()
+        .virtenv
+        .environment_list
         .iter()
         .find(|env| env.id == env_id)
         .cloned();
     let package_operation = app_state.read().virtenv.package_operation.clone();
-    
+
     let mut search_query = use_signal(|| String::new());
     let selected_packages = use_signal(|| Vec::<String>::new());
     let mut show_install_modal = use_signal(|| false);
     let mut show_web_modal = use_signal(|| false);
-    
+
     match environment {
         Some(env) => rsx! {
             div { class: "package-manager",
@@ -27,7 +30,7 @@ pub fn PackageManager(env_id: String) -> Element {
                         span { class: "package-count", "{env.package_count} packages" }
                     }
                 }
-                
+
                 div { class: "manager-toolbar",
                     div { class: "search-section",
                         input {
@@ -39,14 +42,14 @@ pub fn PackageManager(env_id: String) -> Element {
                         }
                         button { class: "btn btn-outline", "🔍" }
                     }
-                    
+
                     div { class: "action-section",
-                        button { 
+                        button {
                             class: "btn btn-primary",
                             onclick: move |_| show_install_modal.set(true),
                             "📦 Install Package"
                         }
-                        button { 
+                        button {
                             class: "btn btn-success",
                             onclick: move |_| {
                                 tracing::info!("Web package modal button clicked");
@@ -54,49 +57,49 @@ pub fn PackageManager(env_id: String) -> Element {
                             },
                             "🌐 Install from Web"
                         }
-                        button { 
+                        button {
                             class: "btn btn-outline",
                             disabled: selected_packages().is_empty(),
                             "🗑️ Uninstall Selected"
                         }
-                        button { 
+                        button {
                             class: "btn btn-outline",
                             "🔄 Update All"
                         }
-                        button { 
+                        button {
                             class: "btn btn-outline",
                             "📄 Export Requirements"
                         }
                     }
                 }
-                
+
                 if let Some(operation) = &package_operation {
                     if operation.env_id == env_id {
                         OperationStatus { operation: operation.clone() }
                     }
                 }
-                
+
                 div { class: "packages-content",
-                    PackageList { 
+                    PackageList {
                         env_id: env_id.clone(),
                         search_query: search_query(),
                         selected_packages: selected_packages.clone()
                     }
                 }
-                
+
                 if show_install_modal() {
-                    InstallPackageModal { 
+                    InstallPackageModal {
                         env_id: env_id.clone(),
                         language: env.language.clone(),
                         on_close: move |_| show_install_modal.set(false)
                     }
                 }
-                
+
                 if show_web_modal() {
                     {
                         tracing::info!("Rendering WebPackageModal");
                         rsx! {
-                            WebPackageModal { 
+                            WebPackageModal {
                                 env_id: env_id.clone(),
                                 language: env.language.clone(),
                                 on_close: move |_| {
@@ -113,7 +116,7 @@ pub fn PackageManager(env_id: String) -> Element {
             div { class: "error-state",
                 "Environment not found"
             }
-        }
+        },
     }
 }
 
@@ -128,7 +131,7 @@ fn OperationStatus(operation: PackageOperationStatus) -> Element {
     } else {
         "operation-status"
     };
-    
+
     rsx! {
         div { class: "{status_class}",
             div { class: "operation-info",
@@ -141,7 +144,7 @@ fn OperationStatus(operation: PackageOperationStatus) -> Element {
                 } else {
                     span { class: "operation-icon", "ℹ️" }
                 }
-                
+
                 div { class: "operation-details",
                     div { class: "operation-title",
                         "{operation.operation} packages"
@@ -162,28 +165,37 @@ fn OperationStatus(operation: PackageOperationStatus) -> Element {
 }
 
 #[component]
-fn PackageList(env_id: String, search_query: String, selected_packages: Signal<Vec<String>>) -> Element {
+fn PackageList(
+    env_id: String,
+    search_query: String,
+    selected_packages: Signal<Vec<String>>,
+) -> Element {
     // Mock package data - in real implementation, this would come from the backend
     let packages = vec![
         ("numpy", "1.24.3", "Fundamental package for array computing"),
         ("pandas", "2.0.1", "Data manipulation and analysis library"),
-        ("matplotlib", "3.7.1", "Comprehensive library for creating visualizations"),
+        (
+            "matplotlib",
+            "3.7.1",
+            "Comprehensive library for creating visualizations",
+        ),
         ("requests", "2.31.0", "Simple HTTP library for Python"),
         ("scikit-learn", "1.2.2", "Machine learning library"),
     ];
-    
-    let filtered_packages: Vec<_> = packages.into_iter()
+
+    let filtered_packages: Vec<_> = packages
+        .into_iter()
         .filter(|(name, _, _)| {
             search_query.is_empty() || name.to_lowercase().contains(&search_query.to_lowercase())
         })
         .collect();
     let filtered_packages_for_select_all = filtered_packages.clone();
-    
+
     rsx! {
         div { class: "package-list",
             div { class: "list-header",
                 div { class: "select-all",
-                    input { 
+                    input {
                         r#type: "checkbox",
                         onchange: move |evt| {
                             if evt.checked() {
@@ -206,7 +218,7 @@ fn PackageList(env_id: String, search_query: String, selected_packages: Signal<V
                     }
                 }
             }
-            
+
             div { class: "packages-grid",
                 for (name, version, description) in filtered_packages {
                     PackageItem {
@@ -236,11 +248,17 @@ fn PackageList(env_id: String, search_query: String, selected_packages: Signal<V
 }
 
 #[component]
-fn PackageItem(name: String, version: String, description: String, selected: bool, on_select: EventHandler<bool>) -> Element {
+fn PackageItem(
+    name: String,
+    version: String,
+    description: String,
+    selected: bool,
+    on_select: EventHandler<bool>,
+) -> Element {
     rsx! {
         div { class: format!("package-item {}", if selected { "selected" } else { ""}),
             div { class: "package-checkbox",
-                input { 
+                input {
                     r#type: "checkbox",
                     checked: selected,
                     onchange: move |evt| on_select.call(evt.checked())
@@ -266,19 +284,19 @@ fn PackageItem(name: String, version: String, description: String, selected: boo
 fn InstallPackageModal(env_id: String, language: String, on_close: EventHandler<()>) -> Element {
     let mut package_name = use_signal(|| String::new());
     let mut package_version = use_signal(|| String::new());
-    
+
     rsx! {
         div { class: "modal-overlay",
             div { class: "install-modal",
                 div { class: "modal-header",
                     h3 { "Install Package" }
-                    button { 
+                    button {
                         class: "close-btn",
                         onclick: move |_| on_close.call(()),
                         "×"
                     }
                 }
-                
+
                 div { class: "modal-content",
                     div { class: "install-form",
                         div { class: "form-group",
@@ -296,7 +314,7 @@ fn InstallPackageModal(env_id: String, language: String, on_close: EventHandler<
                                 oninput: move |evt| package_name.set(evt.value())
                             }
                         }
-                        
+
                         div { class: "form-group",
                             label { "Version (Optional)" }
                             input {
@@ -309,14 +327,14 @@ fn InstallPackageModal(env_id: String, language: String, on_close: EventHandler<
                         }
                     }
                 }
-                
+
                 div { class: "modal-actions",
-                    button { 
+                    button {
                         class: "btn btn-secondary",
                         onclick: move |_| on_close.call(()),
                         "Cancel"
                     }
-                    button { 
+                    button {
                         class: "btn btn-primary",
                         disabled: package_name().trim().is_empty(),
                         onclick: move |_| {

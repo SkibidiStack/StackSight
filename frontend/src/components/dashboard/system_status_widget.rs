@@ -23,7 +23,11 @@ pub fn SystemStatusWidget() -> Element {
         format!("{alerts_count} open")
     };
 
-    let docker_label = if docker_connected { "Connected" } else { "Offline" };
+    let docker_label = if docker_connected {
+        "Connected"
+    } else {
+        "Offline"
+    };
 
     rsx! {
         div { class: "panel",

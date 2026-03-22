@@ -11,7 +11,7 @@ pub fn VolumeManager() -> Element {
     let mut show_create = use_signal(|| false);
     let mut create_name = use_signal(|| String::new());
     let mut create_driver = use_signal(|| "local".to_string());
-    
+
     let snapshot = app_state.read();
     let volumes = snapshot.docker.volumes.clone();
     drop(snapshot);
@@ -19,10 +19,7 @@ pub fn VolumeManager() -> Element {
     let search_val = search.read().to_lowercase();
     let filtered: Vec<_> = volumes
         .iter()
-        .filter(|v| {
-            search_val.is_empty()
-                || v.name.to_lowercase().contains(&search_val)
-        })
+        .filter(|v| search_val.is_empty() || v.name.to_lowercase().contains(&search_val))
         .collect();
 
     rsx! {
@@ -65,7 +62,7 @@ pub fn VolumeManager() -> Element {
                     tbody {
                         {filtered.iter().map(|volume| {
                             let name = volume.name.clone();
-                            
+
                             let on_delete = {
                                 let name = name.clone();
                                 let bridge = bridge.clone();
@@ -73,7 +70,7 @@ pub fn VolumeManager() -> Element {
                                     bridge.send(Command::DockerRemoveVolume { name: name.clone(), force: false })
                                 }
                             };
-                            
+
                             rsx! {
                                 tr { class: "table-row", key: "{name}",
                                     td { class: "col-checkbox", input { r#type: "checkbox" } }

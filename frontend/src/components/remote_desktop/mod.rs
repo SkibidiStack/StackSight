@@ -1,13 +1,13 @@
-pub mod connection_list;
 pub mod connection_form;
-pub mod session_viewer;
 pub mod connection_groups;
+pub mod connection_list;
+pub mod session_viewer;
 
-use dioxus::prelude::*;
-use connection_list::ConnectionList;
-use connection_form::ConnectionForm;
-use session_viewer::ActiveSessionsPanel;
 use crate::services::backend_client::{BackendClient, Command};
+use connection_form::ConnectionForm;
+use connection_list::ConnectionList;
+use dioxus::prelude::*;
+use session_viewer::ActiveSessionsPanel;
 
 #[derive(Clone, Copy, PartialEq)]
 enum RemoteDesktopTab {
@@ -22,7 +22,14 @@ pub fn RemoteDesktopView() -> Element {
     let mut selected_connection = use_signal(|| Option::<String>::None);
     let mut show_connection_dialog = use_signal(|| false);
 
-    use_effect(move || { let client = BackendClient::new(); spawn(async move { let _ = client.send_command(Command::RemoteDesktopGetConnections).await; }); });
+    use_effect(move || {
+        let client = BackendClient::new();
+        spawn(async move {
+            let _ = client
+                .send_command(Command::RemoteDesktopGetConnections)
+                .await;
+        });
+    });
     rsx! {
         div { class: "view",
             div { class: "view-header",
@@ -90,7 +97,7 @@ pub fn RemoteDesktopView() -> Element {
                     on_save: move |conn: crate::state::RemoteConnection| {
                         let conn_id = selected_connection.read().clone();
                         let client = BackendClient::new();
-                        
+
                         let protocol_str = match conn.protocol {
                             crate::state::ConnectionProtocol::Ssh => "Ssh",
                             crate::state::ConnectionProtocol::Vnc => "Vnc",
