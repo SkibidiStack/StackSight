@@ -11,7 +11,7 @@ struct NavItem {
     route: Route,
 }
 
-fn items() -> [NavItem; 9] {
+fn items() -> [NavItem; 8] {
     [
         NavItem {
             section: Section::Containers,
@@ -56,15 +56,9 @@ fn items() -> [NavItem; 9] {
             route: Route::Monitoring {},
         },
         NavItem {
-            section: Section::NetworkManager,
-            label: "Network Manager",
-            icon: "🌐",
-            route: Route::NetworkManagerRoute {},
-        },
-        NavItem {
             section: Section::RemoteDesktop,
             label: "Remote Desktop",
-            icon: "💻",
+            icon: "⧉",
             route: Route::RemoteDesktop {},
         },
     ]

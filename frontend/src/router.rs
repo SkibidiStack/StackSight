@@ -3,7 +3,6 @@ use crate::components::{
     layout::{MainLayout, Section},
     monitoring::MonitoringDashboard,
     virtenv::EnvironmentList,
-    network::NetworkManagerView,
     remote_desktop::RemoteDesktopView,
 };
 use dioxus::prelude::*;
@@ -25,8 +24,6 @@ pub enum Route {
     VirtualEnvironments {},
     #[route("/monitoring")]
     Monitoring {},
-    #[route("/network-manager")]
-    NetworkManagerRoute {},
     #[route("/remote-desktop")]
     RemoteDesktop {},
 }
@@ -95,15 +92,6 @@ pub fn Monitoring() -> Element {
     rsx! {
         MainLayout { section: Section::Monitoring, title: "System Monitoring".to_string(),
             MonitoringDashboard {}
-        }
-    }
-}
-
-#[component]
-pub fn NetworkManagerRoute() -> Element {
-    rsx! {
-        MainLayout { section: Section::NetworkManager, title: "Network Manager".to_string(),
-            NetworkManagerView {}
         }
     }
 }
