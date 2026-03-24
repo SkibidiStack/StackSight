@@ -66,6 +66,10 @@ impl VirtualEnvService {
         
         let json = fs::read_to_string(&file_path).await?;
         info!("[LOAD_ENVS] Raw JSON content:\n{}", json);
+        if json.trim().is_empty() {
+            info!("[LOAD_ENVS] environments.json is empty; starting with no environments");
+            return Ok(HashMap::new());
+        }
         
         // Parse directly as VirtualEnvironment (backend format)
         let envs: Vec<VirtualEnvironment> = serde_json::from_str(&json)

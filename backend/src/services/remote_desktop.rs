@@ -93,6 +93,10 @@ impl RemoteDesktopService {
         }
         
         let json = fs::read_to_string(&file_path).await?;
+        if json.trim().is_empty() {
+            info!("Connections file is empty; starting with no saved connections");
+            return Ok(());
+        }
         let saved_connections: Vec<RemoteConnection> = serde_json::from_str(&json)?;
         
         let mut connections = self.connections.write().await;
@@ -139,6 +143,10 @@ impl RemoteDesktopService {
         }
         
         let json = fs::read_to_string(&file_path).await?;
+        if json.trim().is_empty() {
+            info!("Groups file is empty; starting with no saved groups");
+            return Ok(());
+        }
         let saved_groups: Vec<ConnectionGroup> = serde_json::from_str(&json)?;
         
         let mut groups = self.groups.write().await;

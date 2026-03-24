@@ -24,6 +24,9 @@ impl AppConfig {
         }
 
         let data = fs::read_to_string(p).await.map_err(|e| CoreError::Config(e.to_string()))?;
+        if data.trim().is_empty() {
+            return Ok(AppConfig::default());
+        }
         let cfg: AppConfig = toml::from_str(&data).map_err(|e| CoreError::Config(e.to_string()))?;
         Ok(cfg)
     }

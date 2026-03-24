@@ -54,7 +54,6 @@ fn main() {
 
     launch(app::AppRoot, vec![], vec![Box::new(cfg)]);
 }
-
 fn load_icon() -> Option<dioxus_desktop::tao::window::Icon> {
     let icon_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("assets")

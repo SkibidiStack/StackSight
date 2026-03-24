@@ -2,7 +2,12 @@ use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::protocol::Message,
+    MaybeTlsStream,
+    WebSocketStream,
+};
 
 // Re-export common types needed for communication
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -135,12 +140,29 @@ pub struct BackendClient {
 }
 
 impl BackendClient {
+    async fn connect_ws(&self) -> Result<WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>> {
+        let mut last_error: Option<anyhow::Error> = None;
+
+        for attempt in 1..=10 {
+            match connect_async(&self.websocket_url).await {
+                Ok((ws_stream, _)) => return Ok(ws_stream),
+                Err(err) => {
+                    let msg = format!("Failed to connect to backend (attempt {attempt}/10): {err}");
+                    last_error = Some(anyhow::anyhow!(msg));
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Failed to connect to backend")))
+    }
+
     pub async fn update_vlan(&self, vlan: &VlanConfig) -> Result<()> {
         let payload = serde_json::json!({
             "type": "network_update_vlan",
             "request": vlan
         });
-        let (ws_stream, _) = connect_async(&self.websocket_url).await?;
+        let ws_stream = self.connect_ws().await?;
         let (mut write, mut read) = ws_stream.split();
         let json = serde_json::to_string(&payload)?;
         write.send(Message::Text(json)).await?;
@@ -167,9 +189,7 @@ impl BackendClient {
 
     /// Send a raw JSON value over WebSocket (used for commands not in the typed enum).
     pub async fn send_ws_command(&self, payload: &serde_json::Value) -> Result<()> {
-        let (ws_stream, _) = connect_async(&self.websocket_url)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to connect to backend: {}", e))?;
+        let ws_stream = self.connect_ws().await?;
         let (mut write, _) = ws_stream.split();
         let json = serde_json::to_string(payload)
             .map_err(|e| anyhow::anyhow!("Failed to serialize: {}", e))?;
@@ -185,9 +205,7 @@ impl BackendClient {
         tracing::info!("Sending command to backend: {:?}", command);
 
         // Connect to WebSocket
-        let (ws_stream, _) = connect_async(&self.websocket_url)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to connect to backend: {}", e))?;
+        let ws_stream = self.connect_ws().await?;
 
         let (mut write, _read) = ws_stream.split();
 
@@ -226,9 +244,7 @@ impl BackendClient {
         tracing::info!("Sending command and waiting for event response");
 
         // Connect to WebSocket
-        let (ws_stream, _) = connect_async(&self.websocket_url)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to connect to backend: {}", e))?;
+        let ws_stream = self.connect_ws().await?;
 
         let (mut write, mut read) = ws_stream.split();
 
