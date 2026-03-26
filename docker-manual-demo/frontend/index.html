@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Docker Manual Build Demo</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Manual Docker Build Demo</h1>
+      <p>This frontend talks to the backend through <code>/api</code>.</p>
+
+      <section>
+        <button id="healthBtn">Check Health</button>
+        <button id="messageBtn">Get Message</button>
+      </section>
+
+      <section>
+        <input id="echoInput" type="text" placeholder="Type text to echo" />
+        <button id="echoBtn">Send Echo</button>
+      </section>
+
+      <pre id="output">Waiting for input...</pre>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
