@@ -189,7 +189,7 @@ impl crate::services::Service for SystemService {
     }
 
     async fn run(mut self) -> Result<()> {
-        let mut interval = tokio::time::interval(Duration::from_secs(2));
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
         
         loop {
             tokio::select! {

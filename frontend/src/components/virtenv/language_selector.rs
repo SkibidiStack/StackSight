@@ -63,10 +63,10 @@ fn get_supported_languages() -> Vec<LanguageOption> {
             id: "python".to_string(),
             name: "Python".to_string(),
             versions: vec![
+                "3.13".to_string(),
                 "3.12".to_string(),
                 "3.11".to_string(),
                 "3.10".to_string(),
-                "3.9".to_string(),
             ],
             logo_class: "logo-python".to_string(),
             description: "High-level programming language with extensive libraries".to_string(),
@@ -74,7 +74,7 @@ fn get_supported_languages() -> Vec<LanguageOption> {
         LanguageOption {
             id: "node".to_string(),
             name: "Node.js".to_string(),
-            versions: vec!["20".to_string(), "18".to_string(), "16".to_string()],
+            versions: vec!["22".to_string(), "20".to_string(), "18".to_string()],
             logo_class: "logo-node".to_string(),
             description: "JavaScript runtime built on Chrome's V8 JavaScript engine".to_string(),
         },
@@ -93,7 +93,7 @@ fn get_supported_languages() -> Vec<LanguageOption> {
         LanguageOption {
             id: "java".to_string(),
             name: "Java".to_string(),
-            versions: vec!["21".to_string(), "17".to_string(), "11".to_string()],
+            versions: vec!["24".to_string(), "21".to_string(), "17".to_string()],
             logo_class: "logo-java".to_string(),
             description: "Object-oriented programming language and computing platform".to_string(),
         },

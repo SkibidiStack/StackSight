@@ -102,7 +102,11 @@ pub fn EnvironmentList() -> Element {
                         version: form.version.clone(),
                         template: form.template.clone(),
                         project_path: form.location.clone(),
-                        packages: form.packages.clone(),
+                        packages: if matches!(form.language.as_deref(), Some("java")) {
+                            Vec::new()
+                        } else {
+                            form.packages.clone()
+                        },
                         location: form.location.clone(),
                     };
 
@@ -217,9 +221,13 @@ fn EnvironmentCard(environment: VirtualEnvironment) -> Element {
 
                                         // Send both activate and cd commands
                                         if let Some(path) = &env_path_clone {
-                                            state.ui.terminal_pending_command = Some(format!("env activate {} && cd {}", env_name_clone, path));
+                                            state.ui.terminal_pending_command = Some(format!(
+                                                "env activate \"{}\" && cd \"{}\"",
+                                                env_name_clone, path
+                                            ));
                                         } else {
-                                            state.ui.terminal_pending_command = Some(format!("env activate {}", env_name_clone));
+                                            state.ui.terminal_pending_command =
+                                                Some(format!("env activate \"{}\"", env_name_clone));
                                         }
 
                                         tracing::info!("Sending activate and cd commands for environment: {}", env_name_clone);
@@ -228,14 +236,16 @@ fn EnvironmentCard(environment: VirtualEnvironment) -> Element {
                                 "Activate"
                             }
                         }
-                        button {
-                            class: "btn btn-sm btn-outline",
-                            onclick: move |evt| {
-                                evt.stop_propagation();
-                                tracing::info!("Package manager for: {}", env_name_for_packages);
-                                show_package_modal.set(true);
-                            },
-                            "Add Packages"
+                        if !environment.language.eq_ignore_ascii_case("java") {
+                            button {
+                                class: "btn btn-sm btn-outline",
+                                onclick: move |evt| {
+                                    evt.stop_propagation();
+                                    tracing::info!("Package manager for: {}", env_name_for_packages);
+                                    show_package_modal.set(true);
+                                },
+                                "Add Packages"
+                            }
                         }
                         button {
                             class: "btn btn-sm btn-danger",

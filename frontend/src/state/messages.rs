@@ -1,6 +1,7 @@
 use crate::services::backend_client::CreateEnvironmentRequest;
 use crate::state::app_state::{
-    ContainerSummary, ImageSummary, NetworkSummary, VirtualEnvironment, VolumeSummary,
+    ContainerSummary, EnvironmentTemplate, ImageSummary, NetworkSummary, VirtualEnvironment,
+    VolumeSummary,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -95,6 +96,7 @@ pub enum Event {
         active: usize,
     },
     VirtualEnvList(Vec<VirtualEnvironment>),
+    VirtualEnvTemplates(Vec<EnvironmentTemplate>),
     VirtualEnvCreated {
         environment: VirtualEnvironment,
     },

@@ -281,6 +281,9 @@ pub struct EnvironmentTemplate {
     pub name: String,
     pub description: String,
     pub language: String,
+    #[serde(default)]
+    pub packages: Vec<String>,
+    #[serde(default)]
     pub package_count: usize,
 }
 
@@ -342,6 +345,10 @@ pub fn now_millis() -> u64 {
 }
 
 pub fn push_toast(ui: &mut UiState, message: impl Into<String>, toast_type: ToastType) {
+    if matches!(toast_type, ToastType::Success | ToastType::Error) {
+        ui.toasts.retain(|toast| toast.toast_type != ToastType::Info);
+    }
+
     let toast_id = now_millis();
     ui.toasts.push(Toast {
         id: toast_id,

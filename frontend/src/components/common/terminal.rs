@@ -294,6 +294,17 @@ fn execute_single_command(state: &mut TerminalState, command: String) {
         return;
     }
 
+    let unquote = |s: &str| {
+        let trimmed = s.trim();
+        if (trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2)
+            || (trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() >= 2)
+        {
+            trimmed[1..trimmed.len() - 1].to_string()
+        } else {
+            trimmed.to_string()
+        }
+    };
+
     match parts[0] {
         "help" => {
             let help_text = vec![
@@ -335,8 +346,13 @@ fn execute_single_command(state: &mut TerminalState, command: String) {
             });
         }
         "cd" => {
-            if parts.len() > 1 {
-                let new_path = parts[1];
+            let cd_arg = command
+                .strip_prefix("cd")
+                .map(|s| s.trim())
+                .unwrap_or("");
+
+            if !cd_arg.is_empty() {
+                let new_path = unquote(cd_arg);
 
                 // Determine the target path
                 let target_path = if new_path.starts_with("~") {
@@ -344,15 +360,15 @@ fn execute_single_command(state: &mut TerminalState, command: String) {
                     if let Some(home) = std::env::var_os("HOME") {
                         new_path.replacen("~", &home.to_string_lossy(), 1)
                     } else {
-                        new_path.to_string()
+                        new_path.clone()
                     }
                 } else if new_path.starts_with("/") {
                     // Absolute path
-                    new_path.to_string()
+                    new_path.clone()
                 } else {
                     // Relative path - resolve against current working directory
                     let current = std::path::Path::new(&state.working_directory);
-                    current.join(new_path).to_string_lossy().to_string()
+                    current.join(&new_path).to_string_lossy().to_string()
                 };
 
                 // Canonicalize the path to handle .. and . components
@@ -414,9 +430,14 @@ fn execute_single_command(state: &mut TerminalState, command: String) {
                         });
                     }
                     "activate" => {
-                        if parts.len() > 2 {
-                            let env_name = parts[2];
-                            state.active_env = Some(env_name.to_string());
+                        let raw_name = command
+                            .strip_prefix("env activate")
+                            .map(|s| s.trim())
+                            .unwrap_or("");
+
+                        if !raw_name.is_empty() {
+                            let env_name = unquote(raw_name);
+                            state.active_env = Some(env_name.clone());
                             state.lines.push_back(TerminalLine {
                                 content: format!("Activated environment: {}", env_name),
                                 line_type: TerminalLineType::System,

@@ -2454,7 +2454,7 @@ select.input {
     border: 1px solid var(--border);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
     pointer-events: auto;
     animation: slideInRight 0.3s ease-out;
@@ -2474,6 +2474,20 @@ select.input {
 .toast-icon {
     font-size: 20px;
     flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toast-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top: 2px solid var(--accent);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
 }
 
 .toast-content {
@@ -2800,6 +2814,7 @@ pub fn AppRoot() -> Element {
                 pending.push_back(Command::DockerListNetworks);
                 pending.push_back(Command::DockerListVolumes);
                 pending.push_back(Command::VirtEnvList); // Request environment list from backend
+                pending.push_back(Command::VirtEnvGetTemplates);
 
                 while let Some(cmd) = pending.pop_front() {
                     if let Err(err) = send_command(&mut sink, cmd.clone()).await {
@@ -2875,16 +2890,26 @@ pub fn AppRoot() -> Element {
         let mut app_state = app_state;
         spawn(async move {
             loop {
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(Duration::from_millis(250)).await;
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_millis() as u64;
 
-                let mut state = app_state.write();
-                state.ui.toasts.retain(|toast| {
-                    now - toast.timestamp < 5000 // Keep toasts for 5 seconds
-                });
+                let has_expired = {
+                    let state = app_state.read();
+                    state.ui.toasts.iter().any(|toast| {
+                        !matches!(toast.toast_type, ToastType::Info) && now - toast.timestamp >= 5000
+                    })
+                };
+
+                if has_expired {
+                    let mut state = app_state.write();
+                    state.ui.toasts.retain(|toast| {
+                        matches!(toast.toast_type, ToastType::Info)
+                            || now - toast.timestamp < 5000
+                    });
+                }
             }
         });
     });
@@ -2926,7 +2951,7 @@ fn ToastItem(toast: crate::state::Toast) -> Element {
     let icon = match toast.toast_type {
         ToastType::Success => "✓",
         ToastType::Error => "✕",
-        ToastType::Info => "ℹ",
+        ToastType::Info => "",
     };
 
     let class_name = match toast.toast_type {
@@ -2937,7 +2962,13 @@ fn ToastItem(toast: crate::state::Toast) -> Element {
 
     rsx! {
         div { class: "{class_name}",
-            div { class: "toast-icon", "{icon}" }
+            div { class: "toast-icon",
+                if matches!(toast.toast_type, ToastType::Info) {
+                    div { class: "toast-spinner" }
+                } else {
+                    "{icon}"
+                }
+            }
             div { class: "toast-content", "{toast.message}" }
         }
     }
@@ -3009,7 +3040,7 @@ fn progress_message_for_command(cmd: &Command) -> Option<String> {
         Command::VirtEnvActivate { .. } => Some("Activating virtual environment...".to_string()),
         Command::VirtEnvDeactivate { .. } => Some("Deactivating virtual environment...".to_string()),
         Command::VirtEnvInstallPackages { .. } => Some("Installing packages...".to_string()),
-        Command::VirtEnvGetTemplates => Some("Loading environment templates...".to_string()),
+        Command::VirtEnvGetTemplates => None,
         Command::SystemGetProcessList => Some("Loading process list...".to_string()),
         Command::SystemKillProcess { .. } => Some("Terminating process...".to_string()),
         Command::NetworkScanDevices => Some("Scanning local network...".to_string()),
@@ -3136,6 +3167,20 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
                 .iter()
                 .filter(|e| e.is_active)
                 .count();
+            Ok(())
+        }
+        Ok(Event::VirtualEnvTemplates(mut templates)) => {
+            for template in &mut templates {
+                if template.package_count == 0 && !template.packages.is_empty() {
+                    template.package_count = template.packages.len();
+                }
+            }
+            let mut state = app_state.write();
+            state.ui.toasts.retain(|toast| {
+                !(matches!(toast.toast_type, ToastType::Info)
+                    && toast.message.contains("Loading environment templates"))
+            });
+            state.virtenv.templates = templates;
             Ok(())
         }
         Ok(Event::VirtualEnvCreated { environment }) => {

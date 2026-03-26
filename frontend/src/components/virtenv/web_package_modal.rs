@@ -98,20 +98,57 @@ struct NpmScoreDetail {
     popularity: f64,
 }
 
+// crates.io API response structures
+#[derive(Deserialize, Debug)]
+struct CratesSearchResponse {
+    crates: Vec<CrateItem>,
+}
+
+#[derive(Deserialize, Debug)]
+struct CrateItem {
+    id: String,
+    max_version: Option<String>,
+    description: Option<String>,
+    downloads: Option<u64>,
+    homepage: Option<String>,
+    repository: Option<String>,
+}
+
+// Maven Central API response structures
+#[derive(Deserialize, Debug)]
+struct MavenSearchResponse {
+    response: MavenResponseBody,
+}
+
+#[derive(Deserialize, Debug)]
+struct MavenResponseBody {
+    docs: Vec<MavenDoc>,
+}
+
+#[derive(Deserialize, Debug)]
+struct MavenDoc {
+    g: Option<String>,
+    a: Option<String>,
+    v: Option<String>,
+    #[serde(rename = "latestVersion")]
+    latest_version: Option<String>,
+}
+
 #[component]
 pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<()>) -> Element {
     let mut app_state = use_context::<Signal<AppState>>();
 
-    // Clear any stale package operation state for this environment on modal open
-    {
+    // Clear stale completed state only once when opening modal.
+    let mut cleaned_on_open = use_signal(|| false);
+    if !cleaned_on_open() {
         let mut state = app_state.write();
         if let Some(ref op) = state.virtenv.package_operation {
             if op.env_id == env_id && !op.in_progress {
-                // Clear completed or failed operations when reopening modal
                 state.virtenv.package_operation = None;
                 tracing::info!("Cleared stale package operation state for env: {}", env_id);
             }
         }
+        cleaned_on_open.set(true);
     }
 
     let search_query = use_signal(|| String::new());
@@ -119,10 +156,13 @@ pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<
     let selected_packages = use_signal(|| Vec::<String>::new());
     let mut is_searching = use_signal(|| false);
     let mut search_error = use_signal(|| Option::<String>::None);
+    let has_searched = use_signal(|| false);
     let mut current_tab = use_signal(|| "search".to_string());
     let sort_by = use_signal(|| "relevance".to_string());
+    let language_clone = language.clone();
 
     let package_operation = app_state.read().virtenv.package_operation.clone();
+    let java_packages_disabled = language_clone.eq_ignore_ascii_case("java");
     let is_installing = package_operation
         .as_ref()
         .map(|op| op.env_id == env_id && op.in_progress)
@@ -130,11 +170,12 @@ pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<
 
     // Real search function - makes actual HTTP requests to package registries
     let env_id_clone = env_id.clone();
-    let language_clone = language.clone();
     let perform_search = {
-        let query = search_query();
+        let search_query_signal = search_query.clone();
+        let mut has_searched_signal = has_searched.clone();
         let lang = language_clone.clone();
         move |_| {
+            let query = search_query_signal();
             tracing::info!("🔍 perform_search called with query: '{}'", query);
 
             if query.trim().is_empty() {
@@ -143,6 +184,7 @@ pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<
             }
 
             tracing::info!("Starting search: query='{}', language='{}'", query, lang);
+            has_searched_signal.set(true);
 
             is_searching.set(true);
             search_error.set(None);
@@ -426,6 +468,13 @@ pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<
                     }
                     // Show normal search interface
                     else {
+                        if java_packages_disabled {
+                            div { class: "search-placeholder",
+                                div { class: "placeholder-icon", "☕" }
+                                h4 { "Java package installation is disabled" }
+                                p { "For Java environments, manage dependencies directly in pom.xml or build.gradle." }
+                            }
+                        } else
                         if current_tab() == "search" {
                             SearchTab {
                                 search_query: search_query.clone(),
@@ -433,6 +482,7 @@ pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<
                                 selected_packages: selected_packages.clone(),
                                 is_searching: is_searching(),
                                 search_error: search_error(),
+                                has_searched: has_searched.clone(),
                                 sort_by: sort_by.clone(),
                                 on_search: perform_search,
                                 language: language_clone.clone()
@@ -500,7 +550,7 @@ pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<
                             }
                             button {
                                 class: "btn btn-primary",
-                                disabled: selected_packages().is_empty(),
+                                disabled: java_packages_disabled || selected_packages().is_empty(),
                                 onclick: install_selected,
                                 "Install Selected ({selected_packages().len()})"
                             }
@@ -519,10 +569,12 @@ fn SearchTab(
     selected_packages: Signal<Vec<String>>,
     is_searching: bool,
     search_error: Option<String>,
+    has_searched: Signal<bool>,
     sort_by: Signal<String>,
     on_search: EventHandler<()>,
     language: String,
 ) -> Element {
+    let mut has_searched_signal = has_searched;
     rsx! {
         div { class: "search-tab",
             div { class: "search-section",
@@ -538,11 +590,12 @@ fn SearchTab(
                             _ => "Search packages..."
                         },
                         value: "{search_query()}",
-                        oninput: move |evt| search_query.set(evt.value()),
-                        onkeypress: move |evt| {
-                            tracing::info!("Key pressed in search input: {:?}", evt.code());
-                            if evt.code() == dioxus::prelude::Code::Enter {
-                                tracing::info!("Enter key detected, triggering search");
+                        oninput: move |evt| {
+                            search_query.set(evt.value());
+                            has_searched_signal.set(false);
+                        },
+                        onkeydown: move |evt| {
+                            if evt.key() == dioxus::prelude::Key::Enter {
                                 on_search.call(());
                             }
                         }
@@ -587,7 +640,7 @@ fn SearchTab(
                     packages: search_results(),
                     selected_packages: selected_packages.clone()
                 }
-            } else if !search_query().trim().is_empty() && search_error.is_none() {
+            } else if has_searched() && !search_query().trim().is_empty() && search_error.is_none() {
                 div { class: "no-results",
                     "No packages found for '{search_query()}'"
                 }
@@ -723,13 +776,16 @@ fn PackageCard(package: OnlinePackage, selected: bool, on_select: EventHandler<b
     let mut expanded = use_signal(|| false);
 
     rsx! {
-        div { class: format!("package-card {}", if selected { "selected" } else { "" }),
+        div {
+            class: format!("package-card {}", if selected { "selected" } else { "" }),
+            onclick: move |_| on_select.call(!selected),
             div { class: "package-header",
                 div { class: "package-checkbox",
                     input {
                         r#type: "checkbox",
                         checked: selected,
-                        onchange: move |evt| on_select.call(evt.checked())
+                        oninput: move |evt| on_select.call(evt.checked()),
+                        onclick: move |evt| evt.stop_propagation()
                     }
                 }
 
@@ -749,7 +805,10 @@ fn PackageCard(package: OnlinePackage, selected: bool, on_select: EventHandler<b
                 div { class: "package-actions",
                     button {
                         class: "btn-icon",
-                        onclick: move |_| expanded.set(!expanded()),
+                        onclick: move |evt| {
+                            evt.stop_propagation();
+                            expanded.set(!expanded())
+                        },
                         title: "View details",
                         if expanded() { "▲" } else { "▼" }
                     }
@@ -808,9 +867,102 @@ async fn search_packages(query: &str, language: &str) -> Result<Vec<OnlinePackag
             tracing::info!("Using npm search for Node/JavaScript packages");
             search_npm_packages(query).await
         }
+        "rust" => {
+            tracing::info!("Using crates.io search for Rust packages");
+            search_crates_packages(query).await
+        }
+        "java" => {
+            tracing::info!("Using Maven Central search for Java packages");
+            search_maven_packages(query).await
+        }
         _ => {
             tracing::warn!("Package search not implemented for language: '{}', falling back to popular packages", language);
             Ok(get_popular_packages(language))
+        }
+    }
+}
+
+async fn search_maven_packages(query: &str) -> Result<Vec<OnlinePackage>, String> {
+    let url = format!(
+        "https://search.maven.org/solrsearch/select?q={}&rows=20&wt=json",
+        urlencoding::encode(query)
+    );
+
+    tracing::info!("Searching Maven Central for: {} at URL: {}", query, url);
+
+    match fetch_json::<MavenSearchResponse>(&url).await {
+        Ok(response) => {
+            let packages = response
+                .response
+                .docs
+                .into_iter()
+                .filter_map(|doc| {
+                    let group = doc.g?;
+                    let artifact = doc.a?;
+                    let version = doc
+                        .latest_version
+                        .or(doc.v)
+                        .unwrap_or_else(|| "LATEST".to_string());
+
+                    Some(OnlinePackage {
+                        name: format!("{}:{}", group, artifact),
+                        version,
+                        description: format!("Maven artifact {}:{}", group, artifact),
+                        author: "Java ecosystem".to_string(),
+                        downloads: 0,
+                        license: "See artifact POM".to_string(),
+                        homepage: Some(format!(
+                            "https://search.maven.org/artifact/{}/{}",
+                            group, artifact
+                        )),
+                        repository: None,
+                        keywords: vec!["java".to_string(), "maven".to_string()],
+                    })
+                })
+                .collect();
+
+            Ok(packages)
+        }
+        Err(e) => {
+            tracing::error!("Failed to search Maven Central: {}", e);
+            Err(format!("Failed to search Maven Central: {}", e))
+        }
+    }
+}
+
+async fn search_crates_packages(query: &str) -> Result<Vec<OnlinePackage>, String> {
+    let url = format!(
+        "https://crates.io/api/v1/crates?page=1&per_page=20&q={}",
+        urlencoding::encode(query)
+    );
+
+    tracing::info!("Searching crates.io for: {} at URL: {}", query, url);
+
+    match fetch_json::<CratesSearchResponse>(&url).await {
+        Ok(response) => {
+            let packages = response
+                .crates
+                .into_iter()
+                .map(|krate| OnlinePackage {
+                    name: krate.id,
+                    version: krate
+                        .max_version
+                        .unwrap_or_else(|| "latest".to_string()),
+                    description: krate.description.unwrap_or_default(),
+                    author: "Rust crate author".to_string(),
+                    downloads: krate.downloads.unwrap_or(0),
+                    license: "See crate metadata".to_string(),
+                    homepage: krate.homepage,
+                    repository: krate.repository,
+                    keywords: vec!["rust".to_string(), "crate".to_string()],
+                })
+                .collect();
+
+            Ok(packages)
+        }
+        Err(e) => {
+            tracing::error!("Failed to search crates.io: {}", e);
+            Err(format!("Failed to search crates.io: {}", e))
         }
     }
 }
@@ -1059,6 +1211,55 @@ fn get_package_suggestions(query: &str, language: &str) -> Vec<String> {
         "node" => {
             vec!["express", "lodash", "axios", "react"]
         }
+        "rust" => {
+            let mut suggestions = Vec::new();
+
+            if query_lower.contains("async") || query_lower.contains("runtime") {
+                suggestions.extend_from_slice(&["tokio", "async-std", "futures"]);
+            }
+            if query_lower.contains("json") || query_lower.contains("serialize") {
+                suggestions.extend_from_slice(&["serde", "serde_json", "toml"]);
+            }
+            if query_lower.contains("http") || query_lower.contains("api") {
+                suggestions.extend_from_slice(&["reqwest", "hyper", "axum"]);
+            }
+            if query_lower.contains("cli") || query_lower.contains("command") {
+                suggestions.extend_from_slice(&["clap", "structopt", "argh"]);
+            }
+
+            if suggestions.is_empty() {
+                suggestions.extend_from_slice(&["tokio", "serde", "reqwest", "clap"]);
+            }
+
+            suggestions
+        }
+        "java" => {
+            let mut suggestions = Vec::new();
+
+            if query_lower.contains("spring") {
+                suggestions.extend_from_slice(&["org.springframework:spring-core"]);
+            }
+            if query_lower.contains("test") || query_lower.contains("junit") {
+                suggestions.extend_from_slice(&["org.junit.jupiter:junit-jupiter-api"]);
+            }
+            if query_lower.contains("json") {
+                suggestions.extend_from_slice(&["com.fasterxml.jackson.core:jackson-databind"]);
+            }
+            if query_lower.contains("log") {
+                suggestions.extend_from_slice(&["org.slf4j:slf4j-api"]);
+            }
+
+            if suggestions.is_empty() {
+                suggestions.extend_from_slice(&[
+                    "org.springframework:spring-core",
+                    "com.google.guava:guava",
+                    "org.apache.commons:commons-lang3",
+                    "org.junit.jupiter:junit-jupiter-api",
+                ]);
+            }
+
+            suggestions
+        }
         _ => Vec::new(),
     }
     .into_iter()
@@ -1084,12 +1285,39 @@ async fn get_popular_packages_async(language: &str) -> Result<Vec<OnlinePackage>
             // For npm, we can search for popular packages
             search_npm_packages("express lodash react axios").await
         }
+        "rust" => {
+            let url = "https://crates.io/api/v1/crates?page=1&per_page=20&sort=downloads";
+            match fetch_json::<CratesSearchResponse>(url).await {
+                Ok(response) => Ok(response
+                    .crates
+                    .into_iter()
+                    .map(|krate| OnlinePackage {
+                        name: krate.id,
+                        version: krate
+                            .max_version
+                            .unwrap_or_else(|| "latest".to_string()),
+                        description: krate.description.unwrap_or_default(),
+                        author: "Rust crate author".to_string(),
+                        downloads: krate.downloads.unwrap_or(0),
+                        license: "See crate metadata".to_string(),
+                        homepage: krate.homepage,
+                        repository: krate.repository,
+                        keywords: vec!["rust".to_string(), "crate".to_string()],
+                    })
+                    .collect()),
+                Err(e) => {
+                    tracing::error!("Failed loading popular crates: {}", e);
+                    Ok(get_popular_packages("rust"))
+                }
+            }
+        }
+        "java" => Ok(get_popular_packages("java")),
         _ => Ok(get_popular_packages(language)),
     }
 }
 
 fn get_popular_packages(language: &str) -> Vec<OnlinePackage> {
-    match language {
+    match language.to_lowercase().as_str() {
         "python" => vec![
             OnlinePackage {
                 name: "requests".to_string(),
@@ -1135,6 +1363,65 @@ fn get_popular_packages(language: &str) -> Vec<OnlinePackage> {
                 "helper".to_string(),
             ],
         }],
+        "rust" => vec![
+            OnlinePackage {
+                name: "tokio".to_string(),
+                version: "1.x".to_string(),
+                description: "An event-driven, non-blocking I/O platform for writing asynchronous Rust applications".to_string(),
+                author: "Tokio Contributors".to_string(),
+                downloads: 20_000_000,
+                license: "MIT/Apache-2.0".to_string(),
+                homepage: Some("https://tokio.rs".to_string()),
+                repository: Some("https://github.com/tokio-rs/tokio".to_string()),
+                keywords: vec!["async".to_string(), "runtime".to_string(), "io".to_string()],
+            },
+            OnlinePackage {
+                name: "serde".to_string(),
+                version: "1.x".to_string(),
+                description: "Serialization framework for Rust".to_string(),
+                author: "Serde Developers".to_string(),
+                downloads: 30_000_000,
+                license: "MIT/Apache-2.0".to_string(),
+                homepage: Some("https://serde.rs".to_string()),
+                repository: Some("https://github.com/serde-rs/serde".to_string()),
+                keywords: vec!["serialization".to_string(), "json".to_string()],
+            },
+        ],
+        "java" => vec![
+            OnlinePackage {
+                name: "org.springframework:spring-core".to_string(),
+                version: "6.x".to_string(),
+                description: "Spring Framework Core".to_string(),
+                author: "Spring Team".to_string(),
+                downloads: 0,
+                license: "Apache-2.0".to_string(),
+                homepage: Some("https://spring.io".to_string()),
+                repository: Some("https://github.com/spring-projects/spring-framework".to_string()),
+                keywords: vec!["spring".to_string(), "framework".to_string(), "java".to_string()],
+            },
+            OnlinePackage {
+                name: "com.fasterxml.jackson.core:jackson-databind".to_string(),
+                version: "2.x".to_string(),
+                description: "Jackson data-binding functionality".to_string(),
+                author: "FasterXML".to_string(),
+                downloads: 0,
+                license: "Apache-2.0".to_string(),
+                homepage: Some("https://github.com/FasterXML/jackson-databind".to_string()),
+                repository: Some("https://github.com/FasterXML/jackson-databind".to_string()),
+                keywords: vec!["json".to_string(), "jackson".to_string(), "java".to_string()],
+            },
+            OnlinePackage {
+                name: "org.apache.commons:commons-lang3".to_string(),
+                version: "3.x".to_string(),
+                description: "Apache Commons Lang utilities".to_string(),
+                author: "Apache Software Foundation".to_string(),
+                downloads: 0,
+                license: "Apache-2.0".to_string(),
+                homepage: Some("https://commons.apache.org/proper/commons-lang/".to_string()),
+                repository: Some("https://github.com/apache/commons-lang".to_string()),
+                keywords: vec!["commons".to_string(), "utilities".to_string(), "java".to_string()],
+            },
+        ],
         _ => Vec::new(),
     }
 }
@@ -1148,7 +1435,7 @@ struct PackageCategory {
 }
 
 fn get_package_categories(language: &str) -> Vec<PackageCategory> {
-    match language {
+    match language.to_lowercase().as_str() {
         "python" => vec![
             PackageCategory {
                 id: "data-science".to_string(),
@@ -1195,13 +1482,126 @@ fn get_package_categories(language: &str) -> Vec<PackageCategory> {
                 count: 150,
             },
         ],
+        "rust" => vec![
+            PackageCategory {
+                id: "async".to_string(),
+                name: "Async / Runtime".to_string(),
+                icon: "⚙️".to_string(),
+                count: 220,
+            },
+            PackageCategory {
+                id: "web".to_string(),
+                name: "Web / HTTP".to_string(),
+                icon: "🌐".to_string(),
+                count: 180,
+            },
+            PackageCategory {
+                id: "serde".to_string(),
+                name: "Serialization".to_string(),
+                icon: "📦".to_string(),
+                count: 130,
+            },
+        ],
+        "java" => vec![
+            PackageCategory {
+                id: "frameworks".to_string(),
+                name: "Frameworks".to_string(),
+                icon: "☕".to_string(),
+                count: 200,
+            },
+            PackageCategory {
+                id: "json".to_string(),
+                name: "JSON / Serialization".to_string(),
+                icon: "🧩".to_string(),
+                count: 140,
+            },
+            PackageCategory {
+                id: "testing".to_string(),
+                name: "Testing".to_string(),
+                icon: "🧪".to_string(),
+                count: 120,
+            },
+        ],
         _ => Vec::new(),
     }
 }
 
-fn get_packages_by_category(_language: &str, _category: &str) -> Vec<OnlinePackage> {
-    // Mock implementation
-    Vec::new()
+fn get_packages_by_category(language: &str, category: &str) -> Vec<OnlinePackage> {
+    match (language.to_lowercase().as_str(), category) {
+        ("java", "frameworks") => vec![
+            OnlinePackage {
+                name: "org.springframework:spring-core".to_string(),
+                version: "6.x".to_string(),
+                description: "Spring Framework Core".to_string(),
+                author: "Spring Team".to_string(),
+                downloads: 0,
+                license: "Apache-2.0".to_string(),
+                homepage: Some("https://spring.io".to_string()),
+                repository: Some("https://github.com/spring-projects/spring-framework".to_string()),
+                keywords: vec!["spring".to_string(), "framework".to_string(), "java".to_string()],
+            },
+            OnlinePackage {
+                name: "io.quarkus:quarkus-core".to_string(),
+                version: "3.x".to_string(),
+                description: "Quarkus core framework".to_string(),
+                author: "Quarkus".to_string(),
+                downloads: 0,
+                license: "Apache-2.0".to_string(),
+                homepage: Some("https://quarkus.io".to_string()),
+                repository: Some("https://github.com/quarkusio/quarkus".to_string()),
+                keywords: vec!["quarkus".to_string(), "framework".to_string(), "java".to_string()],
+            },
+        ],
+        ("java", "json") => vec![
+            OnlinePackage {
+                name: "com.fasterxml.jackson.core:jackson-databind".to_string(),
+                version: "2.x".to_string(),
+                description: "Jackson data-binding functionality".to_string(),
+                author: "FasterXML".to_string(),
+                downloads: 0,
+                license: "Apache-2.0".to_string(),
+                homepage: Some("https://github.com/FasterXML/jackson-databind".to_string()),
+                repository: Some("https://github.com/FasterXML/jackson-databind".to_string()),
+                keywords: vec!["json".to_string(), "jackson".to_string(), "java".to_string()],
+            },
+            OnlinePackage {
+                name: "com.google.code.gson:gson".to_string(),
+                version: "2.x".to_string(),
+                description: "JSON library for Java".to_string(),
+                author: "Google".to_string(),
+                downloads: 0,
+                license: "Apache-2.0".to_string(),
+                homepage: Some("https://github.com/google/gson".to_string()),
+                repository: Some("https://github.com/google/gson".to_string()),
+                keywords: vec!["json".to_string(), "gson".to_string(), "java".to_string()],
+            },
+        ],
+        ("java", "testing") => vec![
+            OnlinePackage {
+                name: "org.junit.jupiter:junit-jupiter-api".to_string(),
+                version: "5.x".to_string(),
+                description: "JUnit 5 API".to_string(),
+                author: "JUnit Team".to_string(),
+                downloads: 0,
+                license: "EPL-2.0".to_string(),
+                homepage: Some("https://junit.org/junit5/".to_string()),
+                repository: Some("https://github.com/junit-team/junit5".to_string()),
+                keywords: vec!["testing".to_string(), "junit".to_string(), "java".to_string()],
+            },
+            OnlinePackage {
+                name: "org.mockito:mockito-core".to_string(),
+                version: "5.x".to_string(),
+                description: "Mockito mocking framework".to_string(),
+                author: "Mockito".to_string(),
+                downloads: 0,
+                license: "MIT".to_string(),
+                homepage: Some("https://site.mockito.org/".to_string()),
+                repository: Some("https://github.com/mockito/mockito".to_string()),
+                keywords: vec!["testing".to_string(), "mock".to_string(), "java".to_string()],
+            },
+        ],
+        _ => Vec::new(),
+    }
 }
 
 fn format_downloads(downloads: u64) -> String {

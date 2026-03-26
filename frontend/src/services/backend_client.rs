@@ -133,6 +133,9 @@ pub enum Command {
     RemoteDesktopDisconnect {
         connection_id: String,
     },
+    RemoteDesktopDeleteConnection {
+        id: String,
+    },
 }
 
 pub struct BackendClient {

@@ -237,7 +237,9 @@ impl VirtualEnvService {
             Language::Python => self.install_python_packages(env, &operation).await,
             Language::Node => self.install_node_packages(env, &operation).await,
             Language::Rust => self.install_rust_packages(env, &operation).await,
-            Language::Java => self.install_java_packages(env, &operation).await,
+            Language::Java => Err(anyhow!(
+                "Adding packages is disabled for Java environments"
+            )),
             Language::Ruby => self.install_ruby_packages(env, &operation).await,
             Language::Php => self.install_php_packages(env, &operation).await,
             Language::Other(ref lang) => Err(anyhow!("Package installation not supported for {}", lang)),
@@ -295,16 +297,208 @@ impl VirtualEnvService {
         }
     }
 
+    async fn write_if_missing(path: &Path, content: &str) -> Result<()> {
+        if !path.exists() {
+            fs::write(path, content).await?;
+        }
+        Ok(())
+    }
+
+    async fn scaffold_language_structure(
+        &self,
+        env_path: &Path,
+        language: &Language,
+        env_name: &str,
+    ) -> Result<()> {
+        match language {
+            Language::Python => {
+                fs::create_dir_all(env_path.join("src")).await?;
+                fs::create_dir_all(env_path.join("tests")).await?;
+                fs::create_dir_all(env_path.join("docs")).await?;
+                fs::create_dir_all(env_path.join("scripts")).await?;
+
+                Self::write_if_missing(
+                    &env_path.join("README.md"),
+                    &format!("# {}\n\nPython environment scaffold.\n", env_name),
+                )
+                .await?;
+                Self::write_if_missing(
+                    &env_path.join("requirements.txt"),
+                    "# Add Python dependencies here\n",
+                )
+                .await?;
+                Self::write_if_missing(
+                    &env_path.join("src").join("main.py"),
+                    "def main():\n    print(\"Hello from Python env\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+                )
+                .await?;
+                Self::write_if_missing(
+                    &env_path.join(".gitignore"),
+                    "__pycache__/\n*.pyc\n.venv/\n.env\n.pytest_cache/\n",
+                )
+                .await?;
+            }
+            Language::Node => {
+                fs::create_dir_all(env_path.join("src")).await?;
+                fs::create_dir_all(env_path.join("tests")).await?;
+                fs::create_dir_all(env_path.join("public")).await?;
+                fs::create_dir_all(env_path.join("config")).await?;
+
+                Self::write_if_missing(
+                    &env_path.join("README.md"),
+                    &format!("# {}\n\nNode environment scaffold.\n", env_name),
+                )
+                .await?;
+                Self::write_if_missing(
+                    &env_path.join("src").join("index.js"),
+                    "console.log('Hello from Node env');\n",
+                )
+                .await?;
+                Self::write_if_missing(
+                    &env_path.join(".gitignore"),
+                    "node_modules/\ndist/\n.env\n",
+                )
+                .await?;
+            }
+            Language::Rust => {
+                fs::create_dir_all(env_path.join("src").join("bin")).await?;
+                fs::create_dir_all(env_path.join("tests")).await?;
+                fs::create_dir_all(env_path.join("examples")).await?;
+
+                Self::write_if_missing(
+                    &env_path.join("README.md"),
+                    &format!("# {}\n\nRust environment scaffold.\n", env_name),
+                )
+                .await?;
+                Self::write_if_missing(
+                    &env_path.join("src").join("lib.rs"),
+                    "pub fn greet() -> &'static str {\n    \"Hello from Rust env\"\n}\n",
+                )
+                .await?;
+            }
+            Language::Java => {
+                fs::create_dir_all(env_path.join("src/main/java")).await?;
+                fs::create_dir_all(env_path.join("src/main/resources")).await?;
+                fs::create_dir_all(env_path.join("src/test/java")).await?;
+
+                Self::write_if_missing(
+                    &env_path.join("README.md"),
+                    &format!("# {}\n\nJava (Maven) environment scaffold.\n", env_name),
+                )
+                .await?;
+                Self::write_if_missing(
+                    &env_path.join("src/main/java").join("App.java"),
+                    "public class App {\n    public static void main(String[] args) {\n        System.out.println(\"Hello from Java env\");\n    }\n}\n",
+                )
+                .await?;
+            }
+            Language::Ruby => {
+                fs::create_dir_all(env_path.join("lib")).await?;
+                fs::create_dir_all(env_path.join("spec")).await?;
+                fs::create_dir_all(env_path.join("bin")).await?;
+
+                Self::write_if_missing(
+                    &env_path.join("README.md"),
+                    &format!("# {}\n\nRuby environment scaffold.\n", env_name),
+                )
+                .await?;
+                Self::write_if_missing(
+                    &env_path.join("lib").join("main.rb"),
+                    "puts 'Hello from Ruby env'\n",
+                )
+                .await?;
+            }
+            Language::Php => {
+                fs::create_dir_all(env_path.join("src")).await?;
+                fs::create_dir_all(env_path.join("tests")).await?;
+                fs::create_dir_all(env_path.join("public")).await?;
+                fs::create_dir_all(env_path.join("config")).await?;
+
+                Self::write_if_missing(
+                    &env_path.join("README.md"),
+                    &format!("# {}\n\nPHP environment scaffold.\n", env_name),
+                )
+                .await?;
+                Self::write_if_missing(
+                    &env_path.join("public").join("index.php"),
+                    "<?php\necho 'Hello from PHP env';\n",
+                )
+                .await?;
+            }
+            Language::Other(_) => {
+                fs::create_dir_all(env_path.join("src")).await?;
+                fs::create_dir_all(env_path.join("docs")).await?;
+                Self::write_if_missing(
+                    &env_path.join("README.md"),
+                    &format!("# {}\n\nGeneric environment scaffold.\n", env_name),
+                )
+                .await?;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn create_python_env(&self, request: &CreateEnvironmentRequest, env_id: &str, env_path: &Path) -> Result<VirtualEnvironment> {
         fs::create_dir_all(env_path).await?;
-        
-        let python_cmd = if let Some(version) = &request.version {
-            format!("python{}", version)
-        } else {
-            "python3".to_string()
-        };
-        
-        command_executor::run(&python_cmd, &["-m", "venv", env_path.to_str().unwrap()]).await?;
+
+        let mut python_candidates: Vec<String> = Vec::new();
+        if let Some(version) = &request.version {
+            let cleaned = version.trim();
+            if !cleaned.is_empty() {
+                python_candidates.push(format!("python{}", cleaned));
+
+                if let Some((major, _minor)) = cleaned.split_once('.') {
+                    if !major.is_empty() {
+                        python_candidates.push(format!("python{}", major));
+                    }
+                }
+            }
+        }
+
+        python_candidates.push("python3".to_string());
+        python_candidates.push("python".to_string());
+        python_candidates.dedup();
+
+        let mut last_error: Option<anyhow::Error> = None;
+        let mut selected_python: Option<String> = None;
+
+        for python_cmd in &python_candidates {
+            match command_executor::run(
+                python_cmd,
+                &["-m", "venv", env_path.to_str().unwrap()],
+            )
+            .await
+            {
+                Ok(_) => {
+                    selected_python = Some(python_cmd.clone());
+                    break;
+                }
+                Err(e) => {
+                    debug!(
+                        "Python interpreter candidate '{}' failed for venv creation: {}",
+                        python_cmd,
+                        e
+                    );
+                    last_error = Some(e);
+                }
+            }
+        }
+
+        if selected_python.is_none() {
+            return Err(last_error.unwrap_or_else(|| anyhow!(
+                "Failed to create Python virtual environment: no usable Python interpreter found"
+            )))
+            .context(format!(
+                "Tried interpreters: {}",
+                python_candidates.join(", ")
+            ));
+        }
+
+        info!(
+            "Created Python venv using interpreter: {}",
+            selected_python.unwrap_or_else(|| "python3".to_string())
+        );
         
         if let Some(template_id) = &request.template {
             self.apply_template(env_path, template_id, &Language::Python).await?;
@@ -313,13 +507,17 @@ impl VirtualEnvService {
         if !request.packages.is_empty() {
             self.install_python_packages_direct(env_path, &request.packages).await?;
         }
+
+        self
+            .scaffold_language_structure(env_path, &Language::Python, &request.name)
+            .await?;
         
         Ok(VirtualEnvironment {
             id: env_id.to_string(),
             name: request.name.clone(),
             path: env_path.to_path_buf(),
             language: Language::Python,
-            version: request.version.clone().unwrap_or_else(|| "3.11".to_string()),
+            version: request.version.clone().unwrap_or_else(|| "3.13".to_string()),
             is_active: false,
             packages: Vec::new(),
             created_at: chrono::Utc::now(),
@@ -344,6 +542,10 @@ impl VirtualEnvService {
         let init_args = vec!["init", "-y"];
         command_executor::run_in_dir("npm", &init_args, env_path).await
             .context("Failed to initialize npm project")?;
+
+        if let Some(template_id) = &request.template {
+            self.apply_template(env_path, template_id, &Language::Node).await?;
+        }
         
         // Install packages if specified
         if !request.packages.is_empty() {
@@ -353,6 +555,10 @@ impl VirtualEnvService {
             command_executor::run_in_dir("npm", &install_args, env_path).await
                 .context("Failed to install npm packages")?;
         }
+
+        self
+            .scaffold_language_structure(env_path, &Language::Node, &request.name)
+            .await?;
         
         Ok(VirtualEnvironment {
             id: env_id.to_string(),
@@ -389,6 +595,10 @@ impl VirtualEnvService {
                 return Err(e).context("Failed to initialize Cargo project");
             }
         }
+
+        if let Some(template_id) = &request.template {
+            self.apply_template(env_path, template_id, &Language::Rust).await?;
+        }
         
         // Add dependencies if specified
         if !request.packages.is_empty() {
@@ -407,6 +617,10 @@ impl VirtualEnvService {
                 }
             }
         }
+
+        self
+            .scaffold_language_structure(env_path, &Language::Rust, &request.name)
+            .await?;
         
         Ok(VirtualEnvironment {
             id: env_id.to_string(),
@@ -427,6 +641,11 @@ impl VirtualEnvService {
     
     async fn create_java_env(&self, request: &CreateEnvironmentRequest, env_id: &str, env_path: &Path) -> Result<VirtualEnvironment> {
         fs::create_dir_all(env_path).await?;
+
+        let java_version = request
+            .version
+            .clone()
+            .unwrap_or_else(|| "21".to_string());
         
         // Create basic Maven project structure
         let src_main_java = env_path.join("src/main/java");
@@ -443,19 +662,24 @@ impl VirtualEnvService {
     <artifactId>{}</artifactId>
     <version>1.0-SNAPSHOT</version>
     <properties>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.source>{}</maven.compiler.source>
+        <maven.compiler.target>{}</maven.compiler.target>
     </properties>
-</project>"#, request.name);
+</project>"#, request.name, java_version, java_version);
         
         fs::write(env_path.join("pom.xml"), pom_content).await?;
-        
+
+        self
+            .scaffold_language_structure(env_path, &Language::Java, &request.name)
+            .await?;
+
+
         Ok(VirtualEnvironment {
             id: env_id.to_string(),
             name: request.name.clone(),
             path: env_path.to_path_buf(),
             language: Language::Java,
-            version: request.version.clone().unwrap_or_else(|| "17".to_string()),
+            version: java_version,
             is_active: false,
             packages: Vec::new(),
             created_at: chrono::Utc::now(),
@@ -482,6 +706,10 @@ impl VirtualEnvService {
                     .context(format!("Failed to install gem: {}", package))?;
             }
         }
+
+        self
+            .scaffold_language_structure(env_path, &Language::Ruby, &request.name)
+            .await?;
         
         Ok(VirtualEnvironment {
             id: env_id.to_string(),
@@ -517,6 +745,10 @@ impl VirtualEnvService {
             command_executor::run_in_dir("composer", &require_args, env_path).await
                 .context("Failed to install Composer packages")?;
         }
+
+        self
+            .scaffold_language_structure(env_path, &Language::Php, &request.name)
+            .await?;
         
         Ok(VirtualEnvironment {
             id: env_id.to_string(),
@@ -542,6 +774,12 @@ impl VirtualEnvService {
             match language {
                 Language::Python => {
                     self.install_python_packages_direct(env_path, &template.packages).await?;
+                }
+                Language::Node => {
+                    self.install_node_packages_direct(env_path, &template.packages).await?;
+                }
+                Language::Rust => {
+                    self.install_rust_packages_direct(env_path, &template.packages).await?;
                 }
                 _ => {
                     warn!(language = ?language, "Template application not implemented for language");
@@ -593,6 +831,51 @@ impl VirtualEnvService {
         }
         
         Err(anyhow!("Failed to install packages in environment: {}", env_path.display()))
+    }
+
+    async fn install_node_packages_direct(&self, env_path: &Path, packages: &[String]) -> Result<()> {
+        if packages.is_empty() {
+            return Ok(());
+        }
+
+        if !env_path.exists() {
+            return Err(anyhow!(
+                "Node environment directory does not exist: {}",
+                env_path.display()
+            ));
+        }
+
+        let mut args = vec!["install"];
+        let package_refs: Vec<&str> = packages.iter().map(|s| s.as_str()).collect();
+        args.extend(package_refs);
+
+        command_executor::run_in_dir("npm", &args, env_path)
+            .await
+            .context("Failed to install npm packages from template")?;
+
+        Ok(())
+    }
+
+    async fn install_rust_packages_direct(&self, env_path: &Path, packages: &[String]) -> Result<()> {
+        if packages.is_empty() {
+            return Ok(());
+        }
+
+        if !env_path.exists() {
+            return Err(anyhow!(
+                "Rust environment directory does not exist: {}",
+                env_path.display()
+            ));
+        }
+
+        for package in packages {
+            let args = vec!["add", package.as_str()];
+            command_executor::run_in_dir("cargo", &args, env_path)
+                .await
+                .context(format!("Failed to add Rust template package: {}", package))?;
+        }
+
+        Ok(())
     }
 
     async fn install_python_packages(&self, env: &VirtualEnvironment, operation: &PackageOperation) -> Result<()> {
@@ -702,24 +985,6 @@ impl VirtualEnvService {
                     .context("Failed to update packages")?;
                 Ok(())
             }
-        }
-    }
-    
-    async fn install_java_packages(&self, env: &VirtualEnvironment, _operation: &PackageOperation) -> Result<()> {
-        info!("Installing Java packages in: {}", env.path.display());
-        
-        // Check if using Maven or Gradle
-        let is_maven = env.path.join("pom.xml").exists();
-        let is_gradle = env.path.join("build.gradle").exists() || env.path.join("build.gradle.kts").exists();
-        
-        if is_maven {
-            // Maven dependencies need to be added to pom.xml manually
-            Err(anyhow!("Maven package installation requires manual editing of pom.xml"))
-        } else if is_gradle {
-            // Gradle dependencies need to be added to build.gradle manually
-            Err(anyhow!("Gradle package installation requires manual editing of build.gradle"))
-        } else {
-            Err(anyhow!("No Maven or Gradle project detected"))
         }
     }
     
@@ -1027,6 +1292,65 @@ impl VirtualEnvService {
                     "seaborn".to_string(),
                     "jupyter".to_string(),
                 ],
+                scripts: HashMap::new(),
+                files: HashMap::new(),
+                settings: HashMap::new(),
+            },
+            EnvironmentTemplate {
+                id: "node-web".to_string(),
+                name: "Node Web App".to_string(),
+                description: "Node.js web starter with express and tooling".to_string(),
+                language: Language::Node,
+                packages: vec![
+                    "express".to_string(),
+                    "dotenv".to_string(),
+                    "cors".to_string(),
+                    "nodemon".to_string(),
+                ],
+                scripts: HashMap::new(),
+                files: HashMap::new(),
+                settings: HashMap::new(),
+            },
+            EnvironmentTemplate {
+                id: "rust-cli".to_string(),
+                name: "Rust CLI".to_string(),
+                description: "Rust command-line app starter".to_string(),
+                language: Language::Rust,
+                packages: vec![
+                    "clap".to_string(),
+                    "anyhow".to_string(),
+                    "tracing".to_string(),
+                ],
+                scripts: HashMap::new(),
+                files: HashMap::new(),
+                settings: HashMap::new(),
+            },
+            EnvironmentTemplate {
+                id: "java-maven-basic".to_string(),
+                name: "Java Maven Basic".to_string(),
+                description: "Basic Java Maven project scaffold".to_string(),
+                language: Language::Java,
+                packages: vec![],
+                scripts: HashMap::new(),
+                files: HashMap::new(),
+                settings: HashMap::new(),
+            },
+            EnvironmentTemplate {
+                id: "ruby-basic".to_string(),
+                name: "Ruby Basic".to_string(),
+                description: "Ruby starter with common gems".to_string(),
+                language: Language::Ruby,
+                packages: vec!["bundler".to_string(), "rake".to_string()],
+                scripts: HashMap::new(),
+                files: HashMap::new(),
+                settings: HashMap::new(),
+            },
+            EnvironmentTemplate {
+                id: "php-composer-basic".to_string(),
+                name: "PHP Composer Basic".to_string(),
+                description: "Basic PHP project scaffold".to_string(),
+                language: Language::Php,
+                packages: vec![],
                 scripts: HashMap::new(),
                 files: HashMap::new(),
                 settings: HashMap::new(),

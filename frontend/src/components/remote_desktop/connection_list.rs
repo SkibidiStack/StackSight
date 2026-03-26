@@ -6,6 +6,7 @@ pub fn ConnectionList(
     connections: Vec<RemoteConnection>,
     on_connect: EventHandler<String>,
     on_edit: EventHandler<String>,
+    on_delete: EventHandler<String>,
 ) -> Element {
     let loading = use_signal(|| false);
     let mut filter_protocol = use_signal(|| Option::<ConnectionProtocol>::None);
@@ -71,7 +72,8 @@ pub fn ConnectionList(
                                 ConnectionRow {
                                     connection: conn.clone(),
                                     on_connect: move |id| on_connect.call(id),
-                                    on_edit: move |id| on_edit.call(id)
+                                    on_edit: move |id| on_edit.call(id),
+                                    on_delete: move |id| on_delete.call(id)
                                 }
                             }
                         }
@@ -87,6 +89,7 @@ fn ConnectionRow(
     connection: RemoteConnection,
     on_connect: EventHandler<String>,
     on_edit: EventHandler<String>,
+    on_delete: EventHandler<String>,
 ) -> Element {
     let protocol_label = match connection.protocol {
         ConnectionProtocol::Ssh => "SSH",
@@ -111,6 +114,7 @@ fn ConnectionRow(
     // Clone connection.id for closure
     let conn_id = connection.id.clone();
     let conn_id_edit = connection.id.clone();
+    let conn_id_delete = connection.id.clone();
 
     rsx! {
         tr { class: "table-row",
@@ -148,7 +152,12 @@ fn ConnectionRow(
                         onclick: move |_| on_edit.call(conn_id_edit.clone()),
                         "✏"
                     }
-                    button { class: "action-btn action-danger", title: "Delete", "🗑" }
+                    button {
+                        class: "action-btn action-danger",
+                        title: "Delete",
+                        onclick: move |_| on_delete.call(conn_id_delete.clone()),
+                        "🗑"
+                    }
                 }
             }
         }

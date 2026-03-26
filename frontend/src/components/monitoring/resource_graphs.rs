@@ -11,6 +11,8 @@ pub struct ResourceHistory {
     pub memory_history: VecDeque<f32>,
     pub network_rx_history: VecDeque<f32>,
     pub network_tx_history: VecDeque<f32>,
+    pub last_cpu_sample: Option<f32>,
+    pub last_mem_sample: Option<f32>,
     pub last_rx_total: u64,
     pub last_tx_total: u64,
     pub smoothed_rx: f32,  // Smoothed display value for RX
@@ -26,6 +28,8 @@ impl Default for ResourceHistory {
             memory_history: VecDeque::with_capacity(MAX_DATA_POINTS),
             network_rx_history: VecDeque::with_capacity(MAX_DATA_POINTS),
             network_tx_history: VecDeque::with_capacity(MAX_DATA_POINTS),
+            last_cpu_sample: None,
+            last_mem_sample: None,
             last_rx_total: 0,
             last_tx_total: 0,
             smoothed_rx: 0.0,
@@ -51,8 +55,40 @@ pub fn ResourceGraphs() -> Element {
         let cpu_mem_smoothing = 0.3; // CPU and memory update relatively smoothly
         let network_smoothing = 0.05; // Network can spike dramatically, use heavy smoothing for persistence
 
-        // Add current CPU usage with smoothing
         let cpu_value = state.system.cpu_usage;
+        let mem_percent = if state.system.memory_total > 0 {
+            (state.system.memory_used as f64 / state.system.memory_total as f64) * 100.0
+        } else {
+            0.0
+        } as f32;
+
+        // Calculate network totals (used to derive rates)
+        let (net_rx, net_tx) = state
+            .system
+            .networks
+            .iter()
+            .fold((0, 0), |acc, n| (acc.0 + n.received, acc.1 + n.transmitted));
+
+        // Ignore duplicate snapshots caused by unrelated app-state updates.
+        // This prevents bursty frame updates and irregular graph motion.
+        let cpu_unchanged = history
+            .last_cpu_sample
+            .map(|prev| (prev - cpu_value).abs() < 0.01)
+            .unwrap_or(false);
+        let mem_unchanged = history
+            .last_mem_sample
+            .map(|prev| (prev - mem_percent).abs() < 0.01)
+            .unwrap_or(false);
+        let network_unchanged = net_rx == history.last_rx_total && net_tx == history.last_tx_total;
+
+        if cpu_unchanged && mem_unchanged && network_unchanged {
+            return;
+        }
+
+        history.last_cpu_sample = Some(cpu_value);
+        history.last_mem_sample = Some(mem_percent);
+
+        // Add current CPU usage with smoothing
         history.smoothed_cpu =
             history.smoothed_cpu * (1.0 - cpu_mem_smoothing) + cpu_value * cpu_mem_smoothing;
 
@@ -62,11 +98,6 @@ pub fn ResourceGraphs() -> Element {
         history.cpu_history.push_back(cpu_value);
 
         // Add current memory usage percentage with smoothing
-        let mem_percent = if state.system.memory_total > 0 {
-            (state.system.memory_used as f64 / state.system.memory_total as f64) * 100.0
-        } else {
-            0.0
-        } as f32;
         history.smoothed_mem =
             history.smoothed_mem * (1.0 - cpu_mem_smoothing) + mem_percent * cpu_mem_smoothing;
 
@@ -74,13 +105,6 @@ pub fn ResourceGraphs() -> Element {
             history.memory_history.pop_front();
         }
         history.memory_history.push_back(mem_percent);
-
-        // Calculate network rate (difference from last sample) in KB/s
-        let (net_rx, net_tx) = state
-            .system
-            .networks
-            .iter()
-            .fold((0, 0), |acc, n| (acc.0 + n.received, acc.1 + n.transmitted));
 
         // Calculate rate based on difference from last total
         let rx_rate = if history.last_rx_total > 0 {
@@ -236,12 +260,14 @@ fn ResourceGraphCard(
                                 .collect::<Vec<_>>()
                                 .join(" ");
 
-                            // Create properly closed area path
-                            let mut area_points = line_points.clone();
-                            // Add bottom-right corner
-                            area_points.push((300.0, 100.0));
-                            // Add bottom-left corner
-                            area_points.push((0.0, 100.0));
+                            // Create area path that matches the actual data span
+                            let first_x = line_points.first().map(|(x, _)| *x).unwrap_or(0.0);
+                            let last_x = line_points.last().map(|(x, _)| *x).unwrap_or(0.0);
+
+                            let mut area_points = Vec::with_capacity(line_points.len() + 2);
+                            area_points.push((first_x, 100.0));
+                            area_points.extend(line_points.iter().copied());
+                            area_points.push((last_x, 100.0));
 
                             let area_path = area_points.iter()
                                 .map(|(x, y)| format!("{},{}", x, y))

@@ -7,34 +7,28 @@ use crate::services::backend_client::{BackendClient, Command};
 use connection_form::ConnectionForm;
 use connection_list::ConnectionList;
 use dioxus::prelude::*;
-use session_viewer::ActiveSessionsPanel;
-
-#[derive(Clone, Copy, PartialEq)]
-enum RemoteDesktopTab {
-    Connections,
-    ActiveSessions,
-}
 
 #[component]
 pub fn RemoteDesktopView() -> Element {
     let mut app_state = use_context::<Signal<crate::state::AppState>>();
-    let mut current_view = use_signal(|| RemoteDesktopTab::Connections);
     let mut selected_connection = use_signal(|| Option::<String>::None);
     let mut show_connection_dialog = use_signal(|| false);
+    let mut requested_connections = use_signal(|| false);
 
     use_effect(move || {
+        if requested_connections() {
+            return;
+        }
+
+        if !app_state.read().remote_desktop.connections.is_empty() {
+            requested_connections.set(true);
+            return;
+        }
+
+        requested_connections.set(true);
         let client = BackendClient::new();
         let mut app_state_effect = app_state;
         spawn(async move {
-            {
-                let mut state = app_state_effect.write();
-                crate::state::push_toast(
-                    &mut state.ui,
-                    "Loading remote connections...",
-                    crate::state::ToastType::Info,
-                );
-            }
-
             match client.send_command(Command::RemoteDesktopGetConnections).await {
                 Ok(_) => {}
                 Err(e) => {
@@ -54,24 +48,6 @@ pub fn RemoteDesktopView() -> Element {
                 h1 { "Remote Desktop" }
                 div { class: "view-actions",
                     button {
-                        class: if *current_view.read() == RemoteDesktopTab::Connections {
-                            "btn primary"
-                        } else {
-                            "btn"
-                        },
-                        onclick: move |_| current_view.set(RemoteDesktopTab::Connections),
-                        "Connections"
-                    }
-                    button {
-                        class: if *current_view.read() == RemoteDesktopTab::ActiveSessions {
-                            "btn primary"
-                        } else {
-                            "btn"
-                        },
-                        onclick: move |_| current_view.set(RemoteDesktopTab::ActiveSessions),
-                        "Active Sessions"
-                    }
-                    button {
                         class: "btn btn-primary",
                         onclick: move |_| {
                             selected_connection.set(None);
@@ -83,51 +59,78 @@ pub fn RemoteDesktopView() -> Element {
             }
 
             div { class: "view-content",
-                match *current_view.read() {
-                    RemoteDesktopTab::Connections => rsx! {
-                        ConnectionList {
-                            connections: app_state.read().remote_desktop.connections.clone(),
-                            on_connect: move |id: String| {
-                                selected_connection.set(Some(id.clone()));
-                                let client = BackendClient::new();
-                                let conn_id = id.clone();
-                                let mut app_state_connect = app_state;
-                                {
-                                    let mut state = app_state_connect.write();
-                                    crate::state::push_toast(
-                                        &mut state.ui,
-                                        "Connecting to remote desktop...",
-                                        crate::state::ToastType::Info,
-                                    );
-                                }
-                                spawn(async move {
-                                    if let Err(e) = client.send_command(Command::RemoteDesktopConnect { connection_id: conn_id }).await {
-                                        tracing::error!("Failed to connect to remote desktop: {}", e);
-                                        let mut state = app_state_connect.write();
-                                        crate::state::push_toast(
-                                            &mut state.ui,
-                                            format!("Remote desktop connection failed: {}", e),
-                                            crate::state::ToastType::Error,
-                                        );
-                                    } else {
-                                        let mut state = app_state_connect.write();
-                                        crate::state::push_toast(
-                                            &mut state.ui,
-                                            "Remote desktop connection request sent",
-                                            crate::state::ToastType::Success,
-                                        );
-                                    }
-                                });
-                            },
-                            on_edit: move |id: String| {
-                                selected_connection.set(Some(id));
-                                show_connection_dialog.set(true);
-                            }
+                ConnectionList {
+                    connections: app_state.read().remote_desktop.connections.clone(),
+                    on_connect: move |id: String| {
+                        selected_connection.set(Some(id.clone()));
+                        let client = BackendClient::new();
+                        let conn_id = id.clone();
+                        let mut app_state_connect = app_state;
+                        {
+                            let mut state = app_state_connect.write();
+                            crate::state::push_toast(
+                                &mut state.ui,
+                                "Connecting to remote desktop...",
+                                crate::state::ToastType::Info,
+                            );
                         }
+                        spawn(async move {
+                            if let Err(e) = client.send_command(Command::RemoteDesktopConnect { connection_id: conn_id }).await {
+                                tracing::error!("Failed to connect to remote desktop: {}", e);
+                                let mut state = app_state_connect.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    format!("Remote desktop connection failed: {}", e),
+                                    crate::state::ToastType::Error,
+                                );
+                            } else {
+                                let mut state = app_state_connect.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    "Remote desktop connection request sent",
+                                    crate::state::ToastType::Success,
+                                );
+                            }
+                        });
                     },
-                    RemoteDesktopTab::ActiveSessions => rsx! {
-                        ActiveSessionsPanel {}
+                    on_edit: move |id: String| {
+                        selected_connection.set(Some(id));
+                        show_connection_dialog.set(true);
                     },
+                    on_delete: move |id: String| {
+                        let client = BackendClient::new();
+                        let mut app_state_delete = app_state;
+                        spawn(async move {
+                            {
+                                let mut state = app_state_delete.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    "Deleting remote connection...",
+                                    crate::state::ToastType::Info,
+                                );
+                            }
+
+                            if let Err(e) = client
+                                .send_command(Command::RemoteDesktopDeleteConnection { id })
+                                .await
+                            {
+                                tracing::error!("Failed to delete remote connection: {}", e);
+                                let mut state = app_state_delete.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    format!("Failed to delete remote connection: {}", e),
+                                    crate::state::ToastType::Error,
+                                );
+                            } else {
+                                let mut state = app_state_delete.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    "Remote connection deleted",
+                                    crate::state::ToastType::Success,
+                                );
+                            }
+                        });
+                    }
                 }
             }
 
