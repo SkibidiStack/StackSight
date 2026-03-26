@@ -20,6 +20,7 @@ pub enum Command {
     DockerBuildImage { context_path: String, tag: Option<String> },
     DockerBuildFromDockerfile { path: String, dockerfile: String, tag: Option<String> },
     DockerBuildManual { dockerfile_path: String, project_path: String, tag: String },
+    DockerComposeManual { compose_file_path: String, project_path: String },
     DockerListNetworks,
     DockerCreateNetwork { name: String, driver: String },
     DockerRemoveNetwork { id: String },

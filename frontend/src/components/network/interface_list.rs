@@ -4,6 +4,7 @@ use crate::services::backend_client::BackendClient;
 
 #[component]
 pub fn InterfaceList() -> Element {
+    let app_state = use_context::<Signal<crate::state::AppState>>();
     let mut interfaces = use_signal(|| Vec::<NetworkInterface>::new());
     let mut loading = use_signal(|| false);
     let mut selected_interface = use_signal(|| Option::<String>::None);
@@ -38,6 +39,15 @@ pub fn InterfaceList() -> Element {
                     button {
                         class: "btn btn-secondary",
                         onclick: move |_| {
+                            {
+                                let mut state = app_state.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    "Refreshing network interfaces...",
+                                    crate::state::ToastType::Info,
+                                );
+                            }
+                            let mut app_state_refresh = app_state;
                             spawn(async move {
                                 let client = BackendClient::new();
                                 if let Ok(raw_interfaces) = client.get_all_interfaces_raw().await {
@@ -45,6 +55,19 @@ pub fn InterfaceList() -> Element {
                                         .filter_map(|val| serde_json::from_value(val).ok())
                                         .collect();
                                     interfaces.set(parsed);
+                                    let mut state = app_state_refresh.write();
+                                    crate::state::push_toast(
+                                        &mut state.ui,
+                                        "Network interfaces refreshed",
+                                        crate::state::ToastType::Success,
+                                    );
+                                } else {
+                                    let mut state = app_state_refresh.write();
+                                    crate::state::push_toast(
+                                        &mut state.ui,
+                                        "Failed to refresh network interfaces",
+                                        crate::state::ToastType::Error,
+                                    );
                                 }
                             });
                         },
@@ -124,8 +147,18 @@ pub fn InterfaceList() -> Element {
                             tracing::info!("[BACKEND REQUEST] Update interface: {:?}", updated);
                             let updated_clone = updated.clone();
                             let mut wait_dialog = show_edit_dialog;
+                            let mut app_state_edit = app_state;
+                            {
+                                let mut state = app_state_edit.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    "Saving network interface changes...",
+                                    crate::state::ToastType::Info,
+                                );
+                            }
                             spawn(async move {
                                 // Stop doing complicated stuff, just modify the json file directly and save it
+                                let mut saved = false;
                                 if let Some(base) = directories::BaseDirs::new() {
                                     let path = base.config_dir().join("manager").join("network").join("bridges.json");
                                     if path.exists() {
@@ -158,12 +191,27 @@ pub fn InterfaceList() -> Element {
                                                     if let Ok(new_content) = serde_json::to_string_pretty(&bridges) {
                                                         let _ = std::fs::write(&path, new_content);
                                                         tracing::info!("Saved modified bridge directly to JSON: {:?}", path);
+                                                        saved = true;
                                                     }
                                                 }
                                             }
                                         }
                                     }
                                 }
+                                let mut state = app_state_edit.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    if saved {
+                                        "Network interface updated"
+                                    } else {
+                                        "No interface changes were saved"
+                                    },
+                                    if saved {
+                                        crate::state::ToastType::Success
+                                    } else {
+                                        crate::state::ToastType::Error
+                                    },
+                                );
                                 wait_dialog.set(false);
                             });
                         }
@@ -181,6 +229,15 @@ pub fn InterfaceList() -> Element {
                             bridge.name, bridge.interfaces, bridge.ip_config);
                         
                         let mut wait_dialog = show_create_bridge;
+                        let mut app_state_bridge = app_state;
+                        {
+                            let mut state = app_state_bridge.write();
+                            crate::state::push_toast(
+                                &mut state.ui,
+                                "Creating network bridge...",
+                                crate::state::ToastType::Info,
+                            );
+                        }
                         spawn(async move {
                             let client = BackendClient::new();
                             if let Ok(_) = client.create_bridge(&bridge).await {
@@ -188,6 +245,19 @@ pub fn InterfaceList() -> Element {
                                 if let Ok(parsed) = client.get_network_interfaces().await {
                                     interfaces.set(parsed);
                                 }
+                                let mut state = app_state_bridge.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    "Network bridge created",
+                                    crate::state::ToastType::Success,
+                                );
+                            } else {
+                                let mut state = app_state_bridge.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    "Failed to create network bridge",
+                                    crate::state::ToastType::Error,
+                                );
                             }
                             wait_dialog.set(false);
                         });

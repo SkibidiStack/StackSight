@@ -115,7 +115,7 @@ pub fn ContainerList() -> Element {
                                 move |_| bridge.send(Command::DockerContainerLogs { id: id.clone() })
                             };
 
-                            let ports_str = "—";
+                            let ports = container.ports.clone();
 
                             rsx! {
                                 tr { class: "table-row", key: "{id}",
@@ -128,7 +128,65 @@ pub fn ContainerList() -> Element {
                                     td { class: "col-status",
                                         span { class: "status-badge {status_class}", "● {state}" }
                                     }
-                                    td { class: "col-ports", "{ports_str}" }
+                                    td { class: "col-ports",
+                                        if ports.is_empty() {
+                                            span { "—" }
+                                        } else {
+                                            div { class: "ports-list",
+                                                for port in ports.iter() {
+                                                    {
+                                                        let protocol = port.protocol.clone().unwrap_or_else(|| "tcp".to_string());
+                                                        let host_port = port.public_port;
+                                                        let private_port = port.private_port;
+                                                        let host_ip = port.ip.clone().unwrap_or_else(|| "localhost".to_string());
+                                                        let is_clickable = host_port.is_some() && state == "running";
+
+                                                        let url = host_port.map(|hp| {
+                                                            if host_ip == "0.0.0.0" || host_ip == "::" || host_ip == "" {
+                                                                format!("http://localhost:{}", hp)
+                                                            } else {
+                                                                format!("http://{}:{}", host_ip, hp)
+                                                            }
+                                                        });
+
+                                                        let label = match host_port {
+                                                            Some(hp) => format!("{}:{}{}", hp, private_port, format!("/{}", protocol)),
+                                                            None => format!("{}{}", private_port, format!("/{}", protocol)),
+                                                        };
+
+                                                        rsx! {
+                                                            if is_clickable {
+                                                                button {
+                                                                    class: "port-pill port-pill-clickable",
+                                                                    title: "Open {url.clone().unwrap_or_default()} in browser",
+                                                                    onclick: {
+                                                                        let url = url.clone().unwrap_or_default();
+                                                                        move |_| {
+                                                                            #[cfg(target_os = "linux")]
+                                                                            {
+                                                                                let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+                                                                            }
+                                                                            #[cfg(target_os = "windows")]
+                                                                            {
+                                                                                let _ = std::process::Command::new("explorer").arg(&url).spawn();
+                                                                            }
+                                                                            #[cfg(target_os = "macos")]
+                                                                            {
+                                                                                let _ = std::process::Command::new("open").arg(&url).spawn();
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "{label}"
+                                                                }
+                                                            } else {
+                                                                span { class: "port-pill", "{label}" }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                     td { class: "col-actions",
                                         div { class: "action-buttons",
                                             if state == "running" {

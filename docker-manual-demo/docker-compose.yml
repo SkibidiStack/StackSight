@@ -1,0 +1,9 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: docker-manual-demo-frontend
+    ports:
+      - "4003:80"
+    restart: unless-stopped

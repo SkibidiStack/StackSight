@@ -1,6 +1,7 @@
 use crate::router::AppRouter;
 use crate::state::{
-    AppState, Command, DockerfileEditor, Event, LogsModal, SystemSnapshot, Theme, Toast, ToastType,
+    push_toast, AppState, Command, DockerfileEditor, Event, LogsModal, SystemSnapshot, Theme,
+    ToastType,
 };
 use dioxus::prelude::*;
 use dioxus_signals::Signal;
@@ -441,6 +442,36 @@ html, body, #main { width: 100%; height: 100%; background: var(--bg); color: var
 
 .col-ports {
     color: var(--muted);
+}
+
+.ports-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.port-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--panel-hover);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.port-pill-clickable {
+    cursor: pointer;
+    color: var(--accent);
+    border-color: rgba(13, 110, 253, 0.35);
+    background: rgba(13, 110, 253, 0.08);
+}
+
+.port-pill-clickable:hover {
+    border-color: var(--accent);
+    background: rgba(13, 110, 253, 0.16);
 }
 
 .col-actions {
@@ -2827,10 +2858,16 @@ pub fn AppRoot() -> Element {
     };
 
     // Provide bridge as context for components to send commands
-    let backend_bridge = BackendBridge { tx: bridge };
+    let backend_bridge = BackendBridge {
+        tx: bridge,
+        app_state: app_state.clone(),
+    };
     use_context_provider(|| backend_bridge);
 
-    let bridge_handle = BackendBridge { tx: bridge };
+    let bridge_handle = BackendBridge {
+        tx: bridge,
+        app_state: app_state.clone(),
+    };
     use_context_provider(|| bridge_handle);
 
     // Auto-dismiss toasts after 5 seconds
@@ -2909,10 +2946,16 @@ fn ToastItem(toast: crate::state::Toast) -> Element {
 #[derive(Clone)]
 pub struct BackendBridge {
     tx: Coroutine<BridgeAction>,
+    app_state: Signal<AppState>,
 }
 
 impl BackendBridge {
     pub fn send(&self, cmd: Command) {
+        if let Some(message) = progress_message_for_command(&cmd) {
+            let mut app_state = self.app_state;
+            let mut state = app_state.write();
+            push_toast(&mut state.ui, message, ToastType::Info);
+        }
         let _ = self.tx.send(BridgeAction::SendCommand(cmd));
     }
 }
@@ -2932,6 +2975,49 @@ async fn send_command(sink: &mut WsSink, cmd: Command) -> Result<(), String> {
     sink.send(Message::Text(payload))
         .await
         .map_err(|e| e.to_string())
+}
+
+fn progress_message_for_command(cmd: &Command) -> Option<String> {
+    match cmd {
+        Command::DockerBuildImage { .. }
+        | Command::DockerBuildFromDockerfile { .. }
+        | Command::DockerBuildManual { .. } => Some("Building Docker image...".to_string()),
+        Command::DockerPullImage { image } => Some(format!("Pulling image {image}...")),
+        Command::DockerComposeManual { .. } => Some("Building stack from compose file...".to_string()),
+        Command::DockerCreateContainer { .. } => Some("Creating container...".to_string()),
+        Command::DockerStart { .. } => Some("Starting container...".to_string()),
+        Command::DockerStop { .. } => Some("Stopping container...".to_string()),
+        Command::DockerRestart { .. } => Some("Restarting container...".to_string()),
+        Command::DockerRemoveContainer { .. } => Some("Removing container...".to_string()),
+        Command::DockerRemoveImage { .. } => Some("Removing image...".to_string()),
+        Command::DockerRunImage { .. } => Some("Launching container from image...".to_string()),
+        Command::DockerPruneImages => Some("Pruning unused Docker images...".to_string()),
+        Command::DockerCreateNetwork { .. } => Some("Creating Docker network...".to_string()),
+        Command::DockerRemoveNetwork { .. } => Some("Removing Docker network...".to_string()),
+        Command::DockerCreateVolume { .. } => Some("Creating Docker volume...".to_string()),
+        Command::DockerRemoveVolume { .. } => Some("Removing Docker volume...".to_string()),
+        Command::DockerScaffold { .. } => Some("Generating Docker scaffold...".to_string()),
+        Command::DockerStartEngine => Some("Starting Docker engine...".to_string()),
+        Command::DockerStopEngine => Some("Stopping Docker engine...".to_string()),
+        Command::DockerGetEngineLogs => Some("Loading Docker engine logs...".to_string()),
+        Command::DockerAnalyzeFolder { .. } => {
+            Some("Analyzing folder for Dockerfile generation...".to_string())
+        }
+        Command::DockerSaveDockerfile { .. } => Some("Saving Dockerfile...".to_string()),
+        Command::VirtEnvCreate { .. } => Some("Creating virtual environment...".to_string()),
+        Command::VirtEnvDelete { .. } => Some("Deleting virtual environment...".to_string()),
+        Command::VirtEnvActivate { .. } => Some("Activating virtual environment...".to_string()),
+        Command::VirtEnvDeactivate { .. } => Some("Deactivating virtual environment...".to_string()),
+        Command::VirtEnvInstallPackages { .. } => Some("Installing packages...".to_string()),
+        Command::VirtEnvGetTemplates => Some("Loading environment templates...".to_string()),
+        Command::SystemGetProcessList => Some("Loading process list...".to_string()),
+        Command::SystemKillProcess { .. } => Some("Terminating process...".to_string()),
+        Command::NetworkScanDevices => Some("Scanning local network...".to_string()),
+        Command::RemoteDesktopGetConnections => Some("Loading remote connections...".to_string()),
+        Command::RemoteDesktopConnect { .. } => Some("Connecting to remote desktop...".to_string()),
+        Command::RemoteDesktopDisconnect { .. } => Some("Disconnecting remote session...".to_string()),
+        _ => None,
+    }
 }
 
 fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), String> {
@@ -3000,22 +3086,7 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
                     .unwrap_or_else(|| format!("{} failed", action))
             };
 
-            let toast_id = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64;
-
-            state.ui.toasts.push(Toast {
-                id: toast_id,
-                message: toast_message,
-                toast_type,
-                timestamp: toast_id,
-            });
-
-            // Keep only last 5 toasts
-            if state.ui.toasts.len() > 5 {
-                state.ui.toasts.remove(0);
-            }
+            push_toast(&mut state.ui, toast_message, toast_type);
 
             Ok(())
         }
@@ -3068,6 +3139,7 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
             Ok(())
         }
         Ok(Event::VirtualEnvCreated { environment }) => {
+            let environment_name = environment.name.clone();
             tracing::info!(
                 "🎉 Received VirtualEnvCreated event for environment: {} (id={})",
                 environment.name,
@@ -3101,6 +3173,11 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
                 .iter()
                 .filter(|e| e.is_active)
                 .count();
+            push_toast(
+                &mut state.ui,
+                format!("Environment created: {}", environment_name),
+                ToastType::Success,
+            );
             tracing::info!(
                 "📋 After adding: {} environments in list",
                 state.virtenv.environment_list.len()
@@ -3118,6 +3195,11 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
                 .iter()
                 .filter(|e| e.is_active)
                 .count();
+            push_toast(
+                &mut state.ui,
+                "Virtual environment deleted",
+                ToastType::Success,
+            );
             Ok(())
         }
         Ok(Event::PackageOperationCompleted {
@@ -3139,6 +3221,19 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
                     op.message = message;
                 }
             }
+            push_toast(
+                &mut state.ui,
+                if success {
+                    "Package operation completed"
+                } else {
+                    "Package operation failed"
+                },
+                if success {
+                    ToastType::Success
+                } else {
+                    ToastType::Error
+                },
+            );
             Ok(())
         }
         Ok(Event::SystemProcessList(processes)) => {
@@ -3160,8 +3255,14 @@ fn handle_event(mut app_state: Signal<AppState>, payload: &str) -> Result<(), St
         }
         Ok(Event::NetworkTopology(topology)) => {
             let mut state = app_state.write();
+            let device_count = topology.devices.len();
             state.network.topology = Some(topology);
             state.network.topology_scanning = false;
+            push_toast(
+                &mut state.ui,
+                format!("Network scan completed: {} device(s) found", device_count),
+                ToastType::Success,
+            );
             Ok(())
         }
         Ok(Event::RemoteDesktopConnectionsUpdated { connections }) => {

@@ -247,6 +247,11 @@ pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<
                                 packages_clone.len()
                             )),
                         });
+                    crate::state::push_toast(
+                        &mut app_state_mut.ui,
+                        format!("Installing {} package(s)...", packages_clone.len()),
+                        crate::state::ToastType::Info,
+                    );
                 }
 
                 // Send command to backend - backend will send PackageOperationCompleted when done
@@ -284,24 +289,11 @@ pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<
                                     } else {
                                         crate::state::ToastType::Error
                                     };
-
-                                    let toast_id = std::time::SystemTime::now()
-                                        .duration_since(std::time::UNIX_EPOCH)
-                                        .unwrap_or_default()
-                                        .as_millis()
-                                        as u64;
-
-                                    state_mut.ui.toasts.push(crate::state::Toast {
-                                        id: toast_id,
+                                    crate::state::push_toast(
+                                        &mut state_mut.ui,
                                         message,
                                         toast_type,
-                                        timestamp: toast_id,
-                                    });
-
-                                    // Keep only last 5 toasts
-                                    if state_mut.ui.toasts.len() > 5 {
-                                        state_mut.ui.toasts.remove(0);
-                                    }
+                                    );
 
                                     // Clear package operation state and close modal
                                     state_mut.virtenv.package_operation = None;
@@ -315,18 +307,11 @@ pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<
                         // Timeout - add error toast and close
                         tracing::warn!("Installation timed out");
                         let mut state_mut = app_state_install.write();
-
-                        let toast_id = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_millis() as u64;
-
-                        state_mut.ui.toasts.push(crate::state::Toast {
-                            id: toast_id,
-                            message: "Package installation timed out".to_string(),
-                            toast_type: crate::state::ToastType::Error,
-                            timestamp: toast_id,
-                        });
+                        crate::state::push_toast(
+                            &mut state_mut.ui,
+                            "Package installation timed out",
+                            crate::state::ToastType::Error,
+                        );
 
                         state_mut.virtenv.package_operation = None;
                         drop(state_mut);
@@ -335,23 +320,11 @@ pub fn WebPackageModal(env_id: String, language: String, on_close: EventHandler<
                     Err(e) => {
                         tracing::error!("❌ Failed to send installation command: {:?}", e);
                         let mut app_state_mut = app_state_install.write();
-
-                        let toast_id = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_millis() as u64;
-
-                        app_state_mut.ui.toasts.push(crate::state::Toast {
-                            id: toast_id,
-                            message: format!("Failed to send command: {}", e),
-                            toast_type: crate::state::ToastType::Error,
-                            timestamp: toast_id,
-                        });
-
-                        // Keep only last 5 toasts
-                        if app_state_mut.ui.toasts.len() > 5 {
-                            app_state_mut.ui.toasts.remove(0);
-                        }
+                        crate::state::push_toast(
+                            &mut app_state_mut.ui,
+                            format!("Failed to send command: {}", e),
+                            crate::state::ToastType::Error,
+                        );
 
                         app_state_mut.virtenv.package_operation = None;
                         drop(app_state_mut);

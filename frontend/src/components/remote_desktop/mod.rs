@@ -17,17 +17,35 @@ enum RemoteDesktopTab {
 
 #[component]
 pub fn RemoteDesktopView() -> Element {
-    let app_state = use_context::<Signal<crate::state::AppState>>();
+    let mut app_state = use_context::<Signal<crate::state::AppState>>();
     let mut current_view = use_signal(|| RemoteDesktopTab::Connections);
     let mut selected_connection = use_signal(|| Option::<String>::None);
     let mut show_connection_dialog = use_signal(|| false);
 
     use_effect(move || {
         let client = BackendClient::new();
+        let mut app_state_effect = app_state;
         spawn(async move {
-            let _ = client
-                .send_command(Command::RemoteDesktopGetConnections)
-                .await;
+            {
+                let mut state = app_state_effect.write();
+                crate::state::push_toast(
+                    &mut state.ui,
+                    "Loading remote connections...",
+                    crate::state::ToastType::Info,
+                );
+            }
+
+            match client.send_command(Command::RemoteDesktopGetConnections).await {
+                Ok(_) => {}
+                Err(e) => {
+                    let mut state = app_state_effect.write();
+                    crate::state::push_toast(
+                        &mut state.ui,
+                        format!("Failed to load remote connections: {}", e),
+                        crate::state::ToastType::Error,
+                    );
+                }
+            }
         });
     });
     rsx! {
@@ -73,9 +91,31 @@ pub fn RemoteDesktopView() -> Element {
                                 selected_connection.set(Some(id.clone()));
                                 let client = BackendClient::new();
                                 let conn_id = id.clone();
+                                let mut app_state_connect = app_state;
+                                {
+                                    let mut state = app_state_connect.write();
+                                    crate::state::push_toast(
+                                        &mut state.ui,
+                                        "Connecting to remote desktop...",
+                                        crate::state::ToastType::Info,
+                                    );
+                                }
                                 spawn(async move {
                                     if let Err(e) = client.send_command(Command::RemoteDesktopConnect { connection_id: conn_id }).await {
                                         tracing::error!("Failed to connect to remote desktop: {}", e);
+                                        let mut state = app_state_connect.write();
+                                        crate::state::push_toast(
+                                            &mut state.ui,
+                                            format!("Remote desktop connection failed: {}", e),
+                                            crate::state::ToastType::Error,
+                                        );
+                                    } else {
+                                        let mut state = app_state_connect.write();
+                                        crate::state::push_toast(
+                                            &mut state.ui,
+                                            "Remote desktop connection request sent",
+                                            crate::state::ToastType::Success,
+                                        );
                                     }
                                 });
                             },
@@ -130,6 +170,19 @@ pub fn RemoteDesktopView() -> Element {
                         spawn(async move {
                             if let Err(e) = client.send_ws_command(&payload).await {
                                 tracing::error!("Failed to save connection: {}", e);
+                                let mut state = app_state.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    format!("Failed to save remote connection: {}", e),
+                                    crate::state::ToastType::Error,
+                                );
+                            } else {
+                                let mut state = app_state.write();
+                                crate::state::push_toast(
+                                    &mut state.ui,
+                                    "Remote connection saved",
+                                    crate::state::ToastType::Success,
+                                );
                             }
                         });
 

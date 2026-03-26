@@ -70,12 +70,22 @@ pub struct SystemStatus {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ContainerPort {
+    pub private_port: u16,
+    pub public_port: Option<u16>,
+    pub ip: Option<String>,
+    pub protocol: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ContainerSummary {
     pub id: String,
     pub name: String,
     pub state: String,
     pub image: String,
     pub status: Option<String>,
+    #[serde(default)]
+    pub ports: Vec<ContainerPort>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -322,6 +332,28 @@ pub enum ToastType {
     Success,
     Error,
     Info,
+}
+
+pub fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+pub fn push_toast(ui: &mut UiState, message: impl Into<String>, toast_type: ToastType) {
+    let toast_id = now_millis();
+    ui.toasts.push(Toast {
+        id: toast_id,
+        message: message.into(),
+        toast_type,
+        timestamp: toast_id,
+    });
+
+    // Keep only last 5 toasts
+    if ui.toasts.len() > 5 {
+        ui.toasts.remove(0);
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]

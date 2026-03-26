@@ -3,6 +3,7 @@ use crate::services::backend_client::{BackendClient, VlanConfig};
 
 #[component]
 pub fn VlanManager() -> Element {
+    let app_state = use_context::<Signal<crate::state::AppState>>();
     let mut vlans = use_signal(|| Vec::<VlanConfig>::new());
     let loading = use_signal(|| false);
     let mut show_create_dialog = use_signal(|| false);
@@ -82,6 +83,15 @@ pub fn VlanManager() -> Element {
                                     },
                                     on_delete: move |id: u16| {
                                         tracing::info!("[FRONTEND] Deleting VLAN ID: {}", id);
+                                        {
+                                            let mut state = app_state.write();
+                                            crate::state::push_toast(
+                                                &mut state.ui,
+                                                format!("Deleting VLAN {}...", id),
+                                                crate::state::ToastType::Info,
+                                            );
+                                        }
+                                        let mut app_state_delete = app_state;
                                         spawn(async move {
                                             let client = BackendClient::new();
                                             let cmd = serde_json::json!({
@@ -95,6 +105,19 @@ pub fn VlanManager() -> Element {
                                                 if let Ok(loaded_vlans) = client.get_vlans().await {
                                                     vlans.set(loaded_vlans);
                                                 }
+                                                let mut state = app_state_delete.write();
+                                                crate::state::push_toast(
+                                                    &mut state.ui,
+                                                    format!("VLAN {} deleted", id),
+                                                    crate::state::ToastType::Success,
+                                                );
+                                            } else {
+                                                let mut state = app_state_delete.write();
+                                                crate::state::push_toast(
+                                                    &mut state.ui,
+                                                    format!("Failed to delete VLAN {}", id),
+                                                    crate::state::ToastType::Error,
+                                                );
                                             }
                                         });
                                     }
@@ -120,8 +143,18 @@ pub fn VlanManager() -> Element {
                         tracing::info!("[BACKEND REQUEST] Update VLAN: {:?}", updated);
                         let updated_clone = updated.clone();
                         let mut wait_dialog = show_edit_dialog;
+                        let mut app_state_edit = app_state;
+                        {
+                            let mut state = app_state_edit.write();
+                            crate::state::push_toast(
+                                &mut state.ui,
+                                format!("Saving VLAN {}...", updated_clone.id),
+                                crate::state::ToastType::Info,
+                            );
+                        }
                         spawn(async move {
                             // Just modify the json file and save it
+                            let mut saved = false;
                             if let Some(base) = directories::BaseDirs::new() {
                                 let path = base.config_dir().join("manager").join("network").join("vlans.json");
                                 if path.exists() {
@@ -150,12 +183,27 @@ pub fn VlanManager() -> Element {
                                                 if let Ok(new_content) = serde_json::to_string_pretty(&vlans) {
                                                     let _ = std::fs::write(&path, new_content);
                                                     tracing::info!("Saved modified VLAN directly to JSON: {:?}", path);
+                                                    saved = true;
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
+                            let mut state = app_state_edit.write();
+                            crate::state::push_toast(
+                                &mut state.ui,
+                                if saved {
+                                    "VLAN updated"
+                                } else {
+                                    "No VLAN changes were saved"
+                                },
+                                if saved {
+                                    crate::state::ToastType::Success
+                                } else {
+                                    crate::state::ToastType::Error
+                                },
+                            );
                             wait_dialog.set(false);
                         });
                     }
@@ -168,6 +216,15 @@ pub fn VlanManager() -> Element {
                 on_close: move |_| show_create_dialog.set(false),
                 on_create: move |vlan: VlanConfig| {
                     tracing::info!("[FRONTEND] VLAN creation requested: {:?}", vlan);
+                    {
+                        let mut state = app_state.write();
+                        crate::state::push_toast(
+                            &mut state.ui,
+                            format!("Creating VLAN {}...", vlan.id),
+                            crate::state::ToastType::Info,
+                        );
+                    }
+                    let mut app_state_create = app_state;
                     spawn(async move {
                         let client = BackendClient::new();
                         let (ip, netmask) = vlan.ip_config.as_ref()
@@ -191,6 +248,19 @@ pub fn VlanManager() -> Element {
                             if let Ok(loaded_vlans) = client.get_vlans().await {
                                 vlans.set(loaded_vlans);
                             }
+                            let mut state = app_state_create.write();
+                            crate::state::push_toast(
+                                &mut state.ui,
+                                "VLAN created",
+                                crate::state::ToastType::Success,
+                            );
+                        } else {
+                            let mut state = app_state_create.write();
+                            crate::state::push_toast(
+                                &mut state.ui,
+                                "Failed to create VLAN",
+                                crate::state::ToastType::Error,
+                            );
                         }
                         show_create_dialog.set(false);
                     });

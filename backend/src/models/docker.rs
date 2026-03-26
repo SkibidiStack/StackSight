@@ -1,12 +1,22 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ContainerPort {
+    pub private_port: u16,
+    pub public_port: Option<u16>,
+    pub ip: Option<String>,
+    pub protocol: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ContainerSummary {
     pub id: String,
     pub name: String,
     pub state: String,
     pub image: String,
     pub status: Option<String>,
+    #[serde(default)]
+    pub ports: Vec<ContainerPort>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

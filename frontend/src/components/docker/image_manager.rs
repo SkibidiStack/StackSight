@@ -1,5 +1,5 @@
 use crate::app::BackendBridge;
-use crate::components::docker::ManualBuildModal;
+use crate::components::docker::{ManualBuildModal, ManualComposeModal};
 use crate::state::{AppState, Command, DockerScaffoldConfig};
 use dioxus::prelude::*;
 use dioxus_signals::Signal;
@@ -11,7 +11,8 @@ pub fn ImageManager() -> Element {
     let mut search = use_signal(|| String::new());
     let mut pull_image = use_signal(|| "".to_string());
     let mut show_build = use_signal(|| false);
-    let mut show_manual_build = use_signal(|| false);
+    let show_manual_build = use_signal(|| false);
+    let mut show_manual_compose = use_signal(|| false);
     let mut build_context = use_signal(|| "".to_string());
     let mut build_tag = use_signal(|| "".to_string());
     let mut show_scaffold = use_signal(|| false);
@@ -101,8 +102,8 @@ pub fn ImageManager() -> Element {
                     }
                     button {
                         class: "btn",
-                        onclick: move |_| show_manual_build.set(true),
-                        "Manual Build"
+                        onclick: move |_| show_manual_compose.set(true),
+                        "Manual Compose"
                     }
                     button { class: "btn", onclick: move |_| show_scaffold.set(true), "Scaffold" }
                     button { class: "btn", onclick: on_prune, "Clean Up" }
@@ -351,5 +352,8 @@ pub fn ImageManager() -> Element {
 
         // Manual Build Modal
         ManualBuildModal { show: show_manual_build }
+
+        // Manual Compose Modal
+        ManualComposeModal { show: show_manual_compose }
     }
 }

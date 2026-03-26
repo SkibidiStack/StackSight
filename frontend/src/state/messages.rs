@@ -228,6 +228,10 @@ pub enum Command {
         project_path: String,
         tag: String,
     },
+    DockerComposeManual {
+        compose_file_path: String,
+        project_path: String,
+    },
     DockerListNetworks,
     DockerCreateNetwork {
         name: String,

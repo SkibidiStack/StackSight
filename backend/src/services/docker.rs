@@ -1,7 +1,7 @@
 use crate::core::event_bus::EventBus;
 use crate::models::{
     commands::{Command, DockerScaffoldConfig, DockerCreateContainerConfig},
-    docker::{ContainerSummary, DockerStatsSummary, ImageSummary, NetworkSummary, VolumeSummary},
+    docker::{ContainerPort, ContainerSummary, DockerStatsSummary, ImageSummary, NetworkSummary, VolumeSummary},
     events::Event,
 };
 use anyhow::Result;
@@ -154,6 +154,20 @@ impl DockerService {
                 state: c.state.unwrap_or_default(),
                 image: c.image.unwrap_or_default(),
                 status: c.status,
+                ports: c
+                    .ports
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|p| {
+                        let protocol = p.typ.map(|t| format!("{t:?}").to_lowercase());
+                        ContainerPort {
+                            private_port: p.private_port,
+                            public_port: p.public_port,
+                            ip: p.ip,
+                            protocol,
+                        }
+                    })
+                    .collect(),
             })
             .collect();
 
@@ -426,6 +440,83 @@ impl DockerService {
             let stdout = String::from_utf8_lossy(&output.stdout);
             Err(anyhow::anyhow!("Build failed:\nSTDOUT: {}\nSTDERR: {}", stdout, stderr))
         }
+    }
+
+    async fn docker_compose_manual(compose_file_path: &str, project_path: &str) -> Result<()> {
+        use tokio::process::Command;
+
+        info!("Starting manual Docker Compose deploy using CLI");
+        info!("Compose file: {}", compose_file_path);
+        info!("Project path: {}", project_path);
+
+        if !std::path::Path::new(compose_file_path).exists() {
+            return Err(anyhow::anyhow!("Compose file not found: {}", compose_file_path));
+        }
+
+        if !std::path::Path::new(project_path).exists() {
+            return Err(anyhow::anyhow!("Project path not found: {}", project_path));
+        }
+
+        let mut cmd = Command::new("docker");
+        cmd.arg("compose")
+            .arg("-f")
+            .arg(compose_file_path)
+            .arg("up")
+            .arg("-d")
+            .arg("--build")
+            .current_dir(project_path);
+
+        info!("Running: docker compose -f {} up -d --build", compose_file_path);
+
+        let output = cmd.output().await?;
+
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            info!("Compose deploy successful: {}", stdout);
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr_lower = stderr.to_lowercase();
+
+        if stderr_lower.contains("docker: 'compose' is not a docker command")
+            || stderr_lower.contains("unknown command \"compose\"")
+        {
+            info!("docker compose plugin unavailable, trying docker-compose fallback");
+
+            let fallback = Command::new("docker-compose")
+                .arg("-f")
+                .arg(compose_file_path)
+                .arg("up")
+                .arg("-d")
+                .arg("--build")
+                .current_dir(project_path)
+                .output()
+                .await?;
+
+            if fallback.status.success() {
+                let fallback_stdout = String::from_utf8_lossy(&fallback.stdout);
+                info!("Compose deploy successful (docker-compose): {}", fallback_stdout);
+                return Ok(());
+            }
+
+            let fallback_stderr = String::from_utf8_lossy(&fallback.stderr);
+            let fallback_stdout = String::from_utf8_lossy(&fallback.stdout);
+            return Err(anyhow::anyhow!(
+                "Compose deploy failed (tried docker compose and docker-compose):\nDocker compose STDOUT: {}\nDocker compose STDERR: {}\nDocker-compose STDOUT: {}\nDocker-compose STDERR: {}",
+                stdout,
+                stderr,
+                fallback_stdout,
+                fallback_stderr
+            ));
+        }
+
+        Err(anyhow::anyhow!(
+            "Compose deploy failed:\nSTDOUT: {}\nSTDERR: {}",
+            stdout,
+            stderr
+        ))
     }
 
     async fn docker_scaffold(config: &DockerScaffoldConfig) -> Result<()> {
@@ -929,6 +1020,21 @@ impl DockerService {
                 match result {
                     Ok(()) => self.bus.publish(Event::DockerAction { action: "build image".to_string(), ok: true, message: Some(format!("Successfully built {}", tag)) }),
                     Err(err) => self.bus.publish(Event::DockerAction { action: "build image".to_string(), ok: false, message: Some(err.to_string()) }),
+                }
+            }
+            Command::DockerComposeManual { compose_file_path, project_path } => {
+                let result = Self::docker_compose_manual(&compose_file_path, &project_path).await;
+                match result {
+                    Ok(()) => self.bus.publish(Event::DockerAction {
+                        action: "compose up".to_string(),
+                        ok: true,
+                        message: Some("Compose stack started successfully".to_string()),
+                    }),
+                    Err(err) => self.bus.publish(Event::DockerAction {
+                        action: "compose up".to_string(),
+                        ok: false,
+                        message: Some(err.to_string()),
+                    }),
                 }
             }
             Command::DockerListNetworks => {}
