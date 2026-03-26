@@ -1,44 +1,48 @@
-const output = document.getElementById('output');
+const clock = document.getElementById('clock');
+const statusEl = document.getElementById('status');
+const noteInput = document.getElementById('noteInput');
+const addNoteBtn = document.getElementById('addNoteBtn');
+const notesList = document.getElementById('notesList');
+const simulateBtn = document.getElementById('simulateBtn');
+const clearBtn = document.getElementById('clearBtn');
 
-function show(data) {
-  output.textContent = JSON.stringify(data, null, 2);
+function updateClock() {
+  clock.textContent = new Date().toLocaleTimeString();
 }
 
-async function callApi(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  return res.json();
+function setStatus(text) {
+  statusEl.textContent = text;
 }
 
-document.getElementById('healthBtn').addEventListener('click', async () => {
-  try {
-    const data = await callApi('/api/health');
-    show(data);
-  } catch (err) {
-    show({ error: String(err) });
+function addNote(text) {
+  const li = document.createElement('li');
+  li.textContent = text;
+  notesList.appendChild(li);
+}
+
+addNoteBtn.addEventListener('click', () => {
+  const text = noteInput.value.trim();
+  if (!text) {
+    setStatus('Please type a note first');
+    return;
   }
+
+  addNote(text);
+  noteInput.value = '';
+  setStatus(`Added note (${notesList.children.length})`);
 });
 
-document.getElementById('messageBtn').addEventListener('click', async () => {
-  try {
-    const data = await callApi('/api/message');
-    show(data);
-  } catch (err) {
-    show({ error: String(err) });
-  }
+simulateBtn.addEventListener('click', () => {
+  setStatus('Building...');
+  window.setTimeout(() => {
+    setStatus('Build step completed successfully');
+  }, 600);
 });
 
-document.getElementById('echoBtn').addEventListener('click', async () => {
-  const text = document.getElementById('echoInput').value;
-  try {
-    const data = await callApi('/api/echo', {
-      method: 'POST',
-      body: JSON.stringify({ text }),
-    });
-    show(data);
-  } catch (err) {
-    show({ error: String(err) });
-  }
+clearBtn.addEventListener('click', () => {
+  notesList.innerHTML = '';
+  setStatus('Notes cleared');
 });
+
+updateClock();
+window.setInterval(updateClock, 1000);

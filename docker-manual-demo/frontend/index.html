@@ -8,20 +8,42 @@
   </head>
   <body>
     <main class="container">
-      <h1>Manual Docker Build Demo</h1>
-      <p>This frontend talks to the backend through <code>/api</code>.</p>
+      <header class="hero">
+        <p class="eyebrow">StackSight Demo</p>
+        <h1>Frontend-Only Manual Build Demo</h1>
+        <p class="subtitle">
+          This page runs independently with no backend service required.
+        </p>
+      </header>
 
-      <section>
-        <button id="healthBtn">Check Health</button>
-        <button id="messageBtn">Get Message</button>
+      <section class="cards">
+        <article class="card">
+          <h2>Current Time</h2>
+          <p id="clock">--:--:--</p>
+        </article>
+
+        <article class="card">
+          <h2>Build Status</h2>
+          <p id="status">Ready</p>
+        </article>
       </section>
 
-      <section>
-        <input id="echoInput" type="text" placeholder="Type text to echo" />
-        <button id="echoBtn">Send Echo</button>
+      <section class="panel">
+        <h2>Quick Notes</h2>
+        <div class="row">
+          <input id="noteInput" type="text" placeholder="Type a note and add it" />
+          <button id="addNoteBtn">Add</button>
+        </div>
+        <ul id="notesList"></ul>
       </section>
 
-      <pre id="output">Waiting for input...</pre>
+      <section class="panel actions">
+        <h2>Actions</h2>
+        <div class="row">
+          <button id="simulateBtn">Simulate Build Step</button>
+          <button id="clearBtn" class="secondary">Clear Notes</button>
+        </div>
+      </section>
     </main>
 
     <script src="./app.js"></script>

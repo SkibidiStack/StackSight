@@ -1,31 +1,86 @@
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #111827;
-  color: #f3f4f6;
+  font-family: Inter, Arial, sans-serif;
+  background: linear-gradient(120deg, #0f172a, #111827 40%, #1e293b);
+  color: #e5e7eb;
 }
 
 .container {
-  max-width: 700px;
-  margin: 40px auto;
-  padding: 24px;
-  background: #1f2937;
-  border-radius: 10px;
+  max-width: 860px;
+  margin: 36px auto;
+  padding: 28px;
+  background: rgba(17, 24, 39, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
 }
 
-h1 {
-  margin-top: 0;
+.hero h1 {
+  margin: 0;
+  font-size: 2rem;
 }
 
-section {
-  margin: 16px 0;
+.eyebrow {
+  margin: 0 0 8px;
+  color: #93c5fd;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.subtitle {
+  color: #cbd5e1;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.card {
+  background: #0b1220;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.card h2,
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+#clock {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #86efac;
+}
+
+#status {
+  margin: 0;
+  font-weight: 600;
+  color: #93c5fd;
+}
+
+.panel {
+  margin-top: 14px;
+  background: #0b1220;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.row {
   display: flex;
   gap: 8px;
 }
 
 input {
   flex: 1;
-  padding: 8px;
+  padding: 10px;
   border-radius: 6px;
   border: 1px solid #4b5563;
   background: #111827;
@@ -33,22 +88,27 @@ input {
 }
 
 button {
-  padding: 8px 12px;
+  padding: 10px 12px;
   border: none;
   border-radius: 6px;
-  background: #2563eb;
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
   color: white;
   cursor: pointer;
 }
 
 button:hover {
-  background: #1d4ed8;
+  filter: brightness(1.06);
 }
 
-pre {
-  margin-top: 16px;
-  background: #0b1220;
-  padding: 12px;
-  border-radius: 6px;
-  min-height: 120px;
+.secondary {
+  background: #334155;
+}
+
+#notesList {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+#notesList li {
+  margin: 4px 0;
 }
